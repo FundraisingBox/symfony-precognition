@@ -10,3 +10,6 @@ composer.lock
 
 # phpunit
 .phpunit.cache/
+
+# symfony container reference dumped by the functional-test kernel
+/config/reference.php
