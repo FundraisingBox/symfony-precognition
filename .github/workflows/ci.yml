@@ -34,7 +34,7 @@ jobs:
       PHP_VERSION: ${{ matrix.php-version }}
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Pull PHP image
         run: docker compose pull --quiet
       - name: Install dependencies (lowest)
