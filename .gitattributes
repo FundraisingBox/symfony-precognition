@@ -1,0 +1,11 @@
+# Exclude development and test files
+/.git-hooks export-ignore
+/.github/ export-ignore
+/tests/ export-ignore
+.editorconfig export-ignore
+.php-cs-fixer.dist.php export-ignore
+phpstan.dist.neon export-ignore
+Makefile export-ignore
+Makefile.setup export-ignore
+phpunit.xml export-ignore
+

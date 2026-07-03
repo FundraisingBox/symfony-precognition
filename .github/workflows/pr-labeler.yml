@@ -1,0 +1,33 @@
+name: "label"
+
+on:
+  - pull_request_target
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  content-label:
+    runs-on: runs-on,runner=cheap,run-id=${{ github.run_id }}
+    steps:
+      - uses: actions/labeler@v6
+        with:
+          sync-labels: true
+
+  conventional-label:
+    runs-on: runs-on,runner=cheap,run-id=${{ github.run_id }}
+    timeout-minutes: 5
+    steps:
+      - uses: bcoe/conventional-release-labels@v1
+        with:
+          type_labels: |
+            {
+            "feat": "✨ Feature",
+            "fix": "🚑 Fix",
+            "ci": "🚀 CI",
+            "docs": "📃 Docs",
+            "refactor": "🔨 Refactor",
+            "build": "🧱 Build"
+            }

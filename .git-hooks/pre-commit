@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+STAGED_FILES=""
+
+WORKDIR="$(git rev-parse --show-toplevel)"
+HOOKS_DIR="${WORKDIR}/$(git config core.hookspath)"
+HOOKS_LOG_FILE="${HOOKS_DIR}/git-hooks.log"
+TMP_PATCH_FILE="${HOOKS_DIR}/pre-commit.patch"
+
+################################################################################
+
+log()
+{
+    timestamp="$(date +%Y-%m-%d_%H:%M)"
+    echo "${timestamp} [$(basename ${0})]: $*" >> "$HOOKS_LOG_FILE"
+}
+
+########################################
+
+abort()
+{
+    log ">>> ERROR running pre-commit: $*"
+    echo ">>> ERROR running pre-commit: $*"
+    exit 1
+}
+
+########################################
+
+rebase_guard()
+{
+    get_staged_files
+
+    if  ! "${HOOKS_DIR}/rebase_guard.sh"
+    then
+        log "> rebase-guard failed"
+        exit 1
+    fi
+}
+
+################################################################################
+
+save_unstaged_changes()
+{
+    if [ 0 -eq "$(git diff --name-only | wc -l)" ]
+    then
+        return 0
+    else
+        git diff --patch --no-color > "${TMP_PATCH_FILE}"
+        log "> diff found, created patch-file"
+
+        test -f "${TMP_PATCH_FILE}" \
+            && git restore "${WORKDIR}"
+
+        log "> restored workdir:"
+        log "$(git status)"
+    fi
+}
+
+################################################################################
+
+get_staged_files()
+{
+    if [ -z "${STAGED_FILES}" ]
+    then
+        STAGED_FILES="$(git --no-pager diff --name-only --diff-filter=d --cached)"
+    fi
+
+    log "======================= pre-commit ========================="
+    log "> with staged files: ${STAGED_FILES}"
+    echo "${STAGED_FILES}"
+}
+
+########################################
+
+build_grep_pattern()
+{
+    echo "${@}" | sed 's/ /\\\|/g'
+}
+
+########################################
+
+get_candidate_files()
+{
+    local php_file_extensions=(
+    "php"
+    )
+
+    local pattern
+    pattern=$(build_grep_pattern "${php_file_extensions[@]}")
+    pattern="\.\($pattern\)\$"
+
+    get_staged_files \
+        | grep --basic-regexp "$pattern"
+}
+
+########################################
+
+
+run_php_cs_fixer()
+{
+    STAGED_PHP_FILES="$(get_candidate_files)"
+
+    if [ -n "${STAGED_PHP_FILES}" ]
+    then
+        docker compose run -ePHP_CS_FIXER_IGNORE_ENV=1 --rm --no-deps php vendor/bin/php-cs-fixer --config=.php-cs-fixer.dist.php fix ${STAGED_PHP_FILES} \
+            || abort "php-cs-fixer failed"
+    fi
+}
+
+########################################
+
+main()
+{
+    rebase_guard
+    save_unstaged_changes
+
+    run_php_cs_fixer
+
+    git add --update
+}
+
+############################################################
+
+main

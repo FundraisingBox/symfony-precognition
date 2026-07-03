@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+WORKDIR="$(git rev-parse --show-toplevel)"
+HOOKS_DIR="${WORKDIR}/$(git config core.hookspath)"
+HOOKS_LOG_FILE="${HOOKS_DIR}/git-hooks.log"
+TMP_PATCH_FILE="${HOOKS_DIR}/pre-commit.patch"
+
+################################################################################
+
+log()
+{
+    local timestamp
+    timestamp="$(date +%Y.%m.%d_%H.%M.%S)"
+    echo "${timestamp}: [$(basename ${0})]: $*" >> "$HOOKS_LOG_FILE"
+}
+
+########################################
+
+rebase_guard()
+{
+    if  ! "${HOOKS_DIR}/rebase_guard.sh"
+    then
+        log "> rebase-guard failed"
+        exit 1
+    fi
+}
+
+################################################################################
+
+restore_saved_changes()
+{
+    # if no patch file is found, exit
+    test ! -f "${TMP_PATCH_FILE}" \
+        && exit 0
+
+    log "patch file found:"
+    log "$(cat $TMP_PATCH_FILE)"
+
+    # apply patch file
+    if git apply --check "${TMP_PATCH_FILE}"
+    then
+        git apply "${TMP_PATCH_FILE}" >/dev/null 2>&1 \
+            && rm "${TMP_PATCH_FILE}"
+    else
+        # if patch could not be applied, move to git workdir
+        timestamp="$(date +%Y.%m.%d_%H.%M.%S)"
+        patch_file="${WORKDIR}/git-hooks_.${timestamp}.patch"
+
+        mv "${TMP_PATCH_FILE}" "$patch_file" \
+            && log "could not apply patch, moved to $patch_file"
+    fi
+}
+
+################################################################################
+
+rebase_guard
+restore_saved_changes

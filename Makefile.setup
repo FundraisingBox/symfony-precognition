@@ -1,0 +1,65 @@
+.PHONY: check-setup-requirements
+check-setup-requirements:
+	@missing=""; \
+	for cmd in gh jq perl; do \
+		if ! command -v $$cmd >/dev/null 2>&1; then \
+			missing="$$missing $$cmd"; \
+		fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo "Error: Required command(s) missing:$$missing"; \
+		exit 1; \
+	fi
+
+.PHONY: setup
+setup: check-setup-requirements vendor ## setup package: replaces placeholder-name, pushes github ruleset, create pr in private composer repository
+	@echo "Please name the package (wikando/…): "; \
+	read PACKAGE_NAME; \
+	PACKAGE="$$PACKAGE_NAME"; \
+	NAMESPACE=$$(echo "$$PACKAGE_NAME" | sed -E 's/(^|-|_| )([a-z])/\U\2/g'); \
+	FILES=".github/ruleset-default-branch.json .github/workflows/notify-repository.yaml composer.json"; \
+	echo "Your package name is wikando/$$PACKAGE"; \
+	echo "Do you want to replace the placeholder with this package name? (y/n)"; \
+	read CONFIRM_REPLACE; \
+	if [ "$$CONFIRM_REPLACE" = "y" ] || [ "$$CONFIRM_REPLACE" = "Y" ]; then \
+	for file in $$FILES; do \
+		perl -i -pe "s/wikando\\/template-composer-package/wikando\/$$PACKAGE/g" $$file; \
+		perl -i -pe "s/TemplateComposerPackage/$$NAMESPACE/g" $$file; \
+	done; \
+	else \
+		echo "Ok, aborted placeholder replacement."; \
+		echo "Please manually replace placeholders in: $$FILES"; \
+	fi; \
+	echo "Do you want to push a ruleset to protect the default branch to GitHub?"; \
+	echo "The repository must be set up before. (y/n)"; \
+	read CONFIRM_RULESET; \
+	if [ "$$CONFIRM_RULESET" = "y" ] || [ "$$CONFIRM_RULESET" = "Y" ]; then \
+		gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "repos/wikando/$$PACKAGE/rulesets" --input=".github/ruleset-default-branch.json" --silent; \
+	fi; \
+	echo "Do you want to create a PR in the private composer-repository to add your package?"; \
+	read CONFIRM_COMPOSER_REPO; \
+	if [ "$$CONFIRM_COMPOSER_REPO" = "y" ] || [ "$$CONFIRM_COMPOSER_REPO" = "Y" ]; then \
+		TMPDIR=$$(mktemp -d); \
+		ORIGINAL_DIR=$$(pwd); \
+		echo "Cloning wikando/composer-repository... into $$TMPDIR"; \
+		gh repo clone wikando/composer-repository $$TMPDIR -- --depth=1; \
+		cd $$TMPDIR; \
+		BRANCH="feat/add-$$PACKAGE-$$RANDOM"; \
+		git checkout -b $$BRANCH; \
+		jq ".repositories += [{\"name\":\"wikando/$$PACKAGE\",\"type\":\"vcs\",\"url\":\"https://github.com/wikando/$$PACKAGE\"}]" config/satis.json > config/satis.json.tmp && mv config/satis.json.tmp config/satis.json; \
+		git add config/satis.json; \
+		git commit -m "feat: add wikando/$$PACKAGE"; \
+		git push origin $$BRANCH; \
+		cd "$$ORIGINAL_DIR"; \
+		rm -rf $$TMPDIR; \
+		echo "Creating PR in composer-repository..."; \
+		gh pr create --title "feat: add wikando/$$PACKAGE" --body "This PR adds wikando/$$PACKAGE to satis.json." --repo wikando/composer-repository --head $$BRANCH || echo "PR creation failed or already exists"; \
+	fi; \
+	echo "Do you want to remove Makefile.setup and commit the removal? (y/n)"; \
+	read CONFIRM_CLEANUP; \
+	if [ "$$CONFIRM_CLEANUP" = "y" ] || [ "$$CONFIRM_CLEANUP" = "Y" ]; then \
+		git rm Makefile.setup; \
+		git commit -m "chore: cleanup setup"; \
+		echo "Makefile.setup removed and committed."; \
+	fi; \
+	echo "Setup completed successfully!";
