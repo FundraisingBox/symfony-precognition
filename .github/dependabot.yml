@@ -1,0 +1,21 @@
+version: 2
+
+updates:
+  - package-ecosystem: "composer"
+    commit-message:
+      prefix: "build(deps): "
+    labels: [ ]
+    directory: "/"
+    versioning-strategy: increase-if-necessary
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 25
+
+  - package-ecosystem: "github-actions"
+    commit-message:
+      prefix: "build(deps): "
+    labels: [ ]
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
