@@ -6,7 +6,7 @@ on:
       php-version:
         description: 'PHP version to use'
         required: true
-        default: '8.1'
+        default: '8.3'
   pull_request: ~
   push: 
     branches:
@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: [8.1, 8.3, 8.4]
+        php-version: [8.3, 8.4, 8.5]
         composer-deps: [lowest, stable]
     env:
       PHP_VERSION: ${{ matrix.php-version }}
