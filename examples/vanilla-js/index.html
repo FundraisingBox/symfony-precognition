@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Symfony Precognition — vanilla JS example</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+      .field { margin-bottom: 1rem; display: flex; flex-direction: column; }
+      label { font-weight: 600; margin-bottom: 0.25rem; }
+      input { padding: 0.5rem; font-size: 1rem; }
+      .error { color: #b00020; font-size: 0.85rem; min-height: 1rem; margin-top: 0.25rem; }
+      button { padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
+      .ok { color: #04724d; }
+    </style>
+  </head>
+  <body>
+    <h1>Register</h1>
+
+    <!-- Each input carries the DTO property path it maps to; the error slot is
+         keyed by the same path so violations can be rendered next to it. -->
+    <form id="registration">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" data-field="username" />
+        <span class="error" data-error-for="username"></span>
+      </div>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" data-field="email" />
+        <span class="error" data-error-for="email"></span>
+      </div>
+
+      <div class="field">
+        <label for="street">Street</label>
+        <input id="street" name="street" data-field="address.street" />
+        <span class="error" data-error-for="address.street"></span>
+      </div>
+
+      <div class="field">
+        <label for="city">City</label>
+        <input id="city" name="city" data-field="address.city" />
+        <span class="error" data-error-for="address.city"></span>
+      </div>
+
+      <button type="submit">Create account</button>
+      <p class="ok" id="status"></p>
+    </form>
+
+    <script type="module" src="./precognition.js"></script>
+  </body>
+</html>
