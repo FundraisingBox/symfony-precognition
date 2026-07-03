@@ -1,0 +1,17 @@
+{
+    "name": "fundraisingbox/symfony-precognition",
+    "description": "A symfony bundle that allows validating requests without executing controller code",
+    "license": "MIT",
+    "type": "symfony-bundle",
+    "require": {},
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.75",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "FundraisingBox\\Precognition\\": "src/"
+        }
+    }
+}

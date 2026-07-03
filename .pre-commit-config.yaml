@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: php-cs-fixer
+        name: php-cs-fixer
+        entry: docker compose run -ePHP_CS_FIXER_IGNORE_ENV=1 --rm --no-deps php vendor/bin/php-cs-fixer --config=.php-cs-fixer.dist.php fix
+        language: system
+        types: [php]
+        require_serial: true

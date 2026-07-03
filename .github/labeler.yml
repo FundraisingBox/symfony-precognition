@@ -1,0 +1,26 @@
+# Add 'No docs' label to any change to php files as long as no docs were added
+"📝 No docs":
+  - all:
+    - changed-files:
+      - any-glob-to-any-file: [ '**/*.php' ]
+      - all-globs-to-all-files: [ '!**/*.md' ]
+
+# Add 'Docs' label to any markdown files
+"📃 Docs":
+  - changed-files:
+    - any-glob-to-any-file: '**/*.md'
+
+"🐘 Composer":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'composer.json'
+      - 'composer.lock'
+      - 'tools/**/composer.json'
+      - 'tools/**/composer.lock' 
+
+# Add 'No tests' label to any change to php files as long as no tests were added
+"🙈 No tests":
+  - all:
+    - changed-files:
+      - any-glob-to-any-file: [ '**/*.php' ]
+      - all-globs-to-all-files: [ '!tests/**/*Test.php' ]
