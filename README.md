@@ -1,26 +1,211 @@
-# Template for composer package
+# Symfony Precognition
 
-This is a template for a composer package. 
-It includes the following features:
+A Symfony bundle that validates a request without executing the controller
+body. A _precognitive_ request runs the normal argument-resolution validation
+(`#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver), then
+short-circuits before the controller runs, so a client can validate input — for
+example live form validation — without creating or mutating anything.
 
-- CI Setup with GitHub Actions
-  - PHPStan
-  - PHPUnit
-  - PHP CS Fixer
-  - Composer diff
-  - Enforced commit conventions
-  - Automatic labeling
-- Release process using `release-please`
-- Dependabot configuration
-- Makefile for common tasks (run `make` to display help and list commands)
-- Git-hooks to fix code style
+- validation passes → `204 No Content` + `Precognition-Success: true`
+- validation fails → the application's normal validation error response (`422`)
+- every precognitive response also carries `Precognition: true` and
+  `Vary: Precognition`
+- optional `Precognition-Validate-Only: a,b` limits which fields are reported
+
+The behaviour is **global and header-driven**: any endpoint can be used
+precognitively by sending `Precognition: true`. There is no per-endpoint opt-in.
+
+## How it works
+
+Validation runs during argument resolution, before the controller body. On
+failure it throws — custom resolvers throw from argument resolution;
+`RequestPayloadValueResolver` (`#[MapRequestPayload]`) throws from its
+`kernel.controller_arguments` subscriber — and the exception flows to
+`kernel.exception`, producing the application's normal error response. On
+success the short-circuit listener replaces the controller with a no-op `204`.
+
+```
+                          Precognition: true request
+                                    │
+              custom resolvers validate here (before event)
+                                    ▼
+ kernel.controller_arguments  ┌────────────────────────────────────────┐
+   MapRequestPayload validation │ runs here (this event, priority 0)     │
+   PrecognitionShortCircuit      │ runs AFTER it (priority -64)           │
+                                └───────────────────┬────────────────────┘
+                          valid │                            │ invalid
+                                ▼                            ▼
+                  setController(no-op 204)        ValidationFailed / HttpException
+                                │                            │
+                                ▼                            ▼
+                        controller skipped             kernel.exception
+                                │            PrecognitionValidationListener (prio 20)
+                                │            then the app's 422 renderer
+                                └──────────────┬─────────────┘
+                                               ▼
+                                          kernel.response
+                       PrecognitionResponseListener adds headers:
+                       Precognition: true, Vary: Precognition,
+                       Precognition-Success: true (on 204 only)
+```
+
+The `Precognition-Validate-Only` filtering happens at the exception stage:
+Symfony's validator dispatches no events, so there is no validation-time hook to
+filter violations. The listener keys off Symfony's standard
+`ValidationFailedException` — found either as the thrown exception (custom
+resolvers) or in the `getPrevious()` chain (`#[MapRequestPayload]` wraps it in an
+`HttpException`). It filters the standard `ConstraintViolationListInterface` in
+place, so the downstream `422` renderer automatically sees the filtered list.
+
+> [!WARNING]
+> **Only argument-resolution validation runs.** The bundle reuses the
+> validation performed while resolving controller arguments —
+> `#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver that
+> throws `ValidationFailedException`. Validation or business rules executed
+> **inside the controller body** (or in a handler behind it) never run for a
+> precognitive request. A `204` therefore means "the payload is structurally
+> valid", not "this operation would succeed".
+
+## Prior art
+
+This bundle ports the request/response protocol of
+[Laravel Precognition](https://github.com/laravel/precognition), also described
+for Rails by [Inertia Precognition](https://inertia-rails.dev/guide/precognition).
+The wire protocol — the `Precognition`, `Precognition-Success` and
+`Precognition-Validate-Only` headers and the `204`/`422` status codes — matches,
+so the same ideas and much of the same frontend behaviour apply.
+
+### Differences from Laravel Precognition
+
+- **Opt-in.** Laravel opts in per route via the `HandlePrecognitiveRequests`
+  middleware. This bundle is global and purely header-driven: any endpoint whose
+  validation runs during argument resolution can be used precognitively.
+- **Rule vs. violation filtering.** Laravel filters the _rules_ before
+  validating, so `Validate-Only` means only those rules execute. This bundle
+  validates everything and filters the resulting _violations_ (post-validation
+  filtering), so expensive constraints on non-requested fields still run.
+- **No per-request hook.** Laravel exposes `$request->isPrecognitive()` for
+  conditional logic in form requests. The equivalent here is
+  `PrecognitionRequest::isPrecognitive()`, but there is no per-endpoint hook or
+  side-effect API — the bundle is transparent.
+- **Error body shape.** The `422` body is whatever your application's renderer
+  produces (Symfony `problem+json` by default), not Laravel's
+  `{errors: {field: [...]}}` shape.
+
+> [!WARNING]
+> The official `laravel-precognition-vue` / `-react` / `-alpine` SDKs are **not**
+> drop-in compatible. Headers and status codes match, so they appear to work,
+> but they read `response.data.errors` — which Symfony's `422` body does not
+> contain — so forms display no field errors. See
+> [docs/laravel-client-compatibility.md](docs/laravel-client-compatibility.md)
+> for the details and a bridge recipe.
+
+## Installation
+
+```bash
+composer require fundraisingbox/symfony-precognition
+```
+
+Enable the bundle (Symfony Flex does this automatically; otherwise add it to
+`config/bundles.php`):
+
+```php
+return [
+    // ...
+    FundraisingBox\Precognition\PrecognitionBundle::class => ['all' => true],
+];
+```
+
+There is nothing to configure and nothing to wire per endpoint. The only
+requirement is that the validation exception raised during argument resolution
+is (or wraps, as previous) Symfony's standard `ValidationFailedException` —
+which is the case for `#[MapRequestPayload]` and for any custom resolver that
+throws it.
 
 ## Usage
 
-1. Create a new repository from this template  
-`gh repo create --private --clone --template wikando/template-composer-package --remote wikando/your-package-name`  
-You can also use the GitHub UI to create a new repository from this template
-2. Run `make setup` to setup the repository ruleset and configure a package name
-3. (optional) Enable pre-commit hooks: `make git-enable-hooks`
-4. Develop your package
-5. Push your code and profit from CI
+Given a controller that maps and validates its payload:
+
+```php
+final class RegistrationController
+{
+    public function __invoke(#[MapRequestPayload] RegistrationInput $input): Response
+    {
+        // never runs for a precognitive request
+    }
+}
+```
+
+a client validates it precognitively with the `Precognition` header:
+
+```bash
+# Success -> 204 No Content
+curl -i -X POST https://example.test/users \
+  -H 'Content-Type: application/json' \
+  -H 'Precognition: true' \
+  -d '{"username":"alice","email":"alice@example.com","address":{"street":"Main 1","city":"Berlin"}}'
+# HTTP/1.1 204 No Content
+# Precognition: true
+# Precognition-Success: true
+# Vary: Precognition
+
+# Failure -> 422 with the app's normal error body
+curl -i -X POST https://example.test/users \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -H 'Precognition: true' \
+  -d '{"username":"al","email":"nope","address":{"street":"","city":""}}'
+# HTTP/1.1 422 Unprocessable Content
+# Precognition: true
+# Vary: Precognition
+
+# Validate only selected fields
+curl -i -X POST https://example.test/users \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -H 'Precognition: true' \
+  -H 'Precognition-Validate-Only: username,email' \
+  -d '{ ... }'
+```
+
+### `Precognition-Validate-Only`
+
+Field paths use Symfony property-path syntax and are matched by prefix, so
+requesting `address` also keeps violations on `address.city`. Dotted object
+syntax (`address.city`) and bracketed collection syntax (`[address][city]`)
+are normalised to the same path, so either form matches a requested field.
+
+Send DTO property paths (`address.city`), not raw form field names.
+
+## CORS
+
+For a cross-origin frontend, allow the request headers and expose the response
+headers. With [nelmio/cors-bundle](https://github.com/nelmio/NelmioCorsBundle):
+
+```yaml
+nelmio_cors:
+    defaults:
+        allow_headers: ['Content-Type', 'Precognition', 'Precognition-Validate-Only']
+        expose_headers: ['Precognition', 'Precognition-Success']
+```
+
+## Frontend example
+
+A dependency-free example is in [`examples/vanilla-js`](examples/vanilla-js): a
+small form that validates each field on blur, cancels superseded in-flight
+validations, and renders the returned violations.
+
+## Components
+
+| Class                                                                       | Responsibility                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [`Http/PrecognitionHeaders`](src/Http/PrecognitionHeaders.php)              | Header-name and value constants                              |
+| [`Http/PrecognitionRequest`](src/Http/PrecognitionRequest.php)              | `isPrecognitive()`, `validateOnly()`                         |
+| [`EventListener/PrecognitionShortCircuitListener`](src/EventListener/PrecognitionShortCircuitListener.php) | `kernel.controller_arguments` → no-op `204` |
+| [`EventListener/PrecognitionResponseListener`](src/EventListener/PrecognitionResponseListener.php) | `kernel.response` → protocol headers                |
+| [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → `Precognition-Validate-Only` filtering |
+| [`Validation/ViolationPathFilter`](src/Validation/ViolationPathFilter.php)  | Field-path matching                                          |
+
+## License
+
+MIT. See [LICENSE](LICENSE).
