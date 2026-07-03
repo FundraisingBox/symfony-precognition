@@ -1,0 +1,31 @@
+name: "composer diff"
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - '!*'
+      - 'composer.lock'
+
+## This workflow needs the `pull-request` permissions to work
+## Refs: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#permissions
+permissions:
+  pull-requests: write
+  contents: read
+jobs:
+  comment-composer-lock-diff:
+    name: Comment composer.lock diff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Comment composer.lock diff
+        uses: WyriHaximus/github-action-composer.lock-diff@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

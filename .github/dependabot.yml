@@ -1,0 +1,28 @@
+version: 2
+registries:
+  wikando-composer:
+    type: composer-repository
+    url: composer.fundraisingbox.io
+    username: dependabot
+    password: ${{ secrets.DEPENDABOT_COMPOSER_ACCESS_TOKEN }}
+
+updates:
+  - package-ecosystem: "composer"
+    registries: "*" # includes private registry
+    commit-message:
+      prefix: "build(deps): "
+    labels: [ ]
+    directory: "/"
+    versioning-strategy: increase-if-necessary
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 25
+
+  - package-ecosystem: "github-actions"
+    commit-message:
+      prefix: "build(deps): "
+    labels: [ ]
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10

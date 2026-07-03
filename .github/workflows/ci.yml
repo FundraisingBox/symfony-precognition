@@ -1,0 +1,51 @@
+name: "ci"
+
+on:
+  workflow_dispatch:
+    inputs: 
+      php-version:
+        description: 'PHP version to use'
+        required: true
+        default: '8.1'
+  pull_request: ~
+  push: 
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write # write is required for OIDC
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: PHP ${{ matrix.php-version }} - Composer ${{ matrix.composer-deps }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: [8.1, 8.3, 8.4]
+        composer-deps: [lowest, stable]
+    env:
+      PHP_VERSION: ${{ matrix.php-version }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+      - name: Pull PHP image
+        run: docker compose pull --quiet
+      - name: Install dependencies (lowest)
+        if: matrix.composer-deps == 'lowest'
+        run: docker compose run --rm --no-deps php composer update --no-interaction --prefer-lowest --no-scripts
+      - name: Install dependencies (stable)
+        if: matrix.composer-deps == 'stable'
+        run: docker compose run --rm --no-deps php composer update --no-interaction --no-scripts
+      - name: php-cs-fixer check
+        run: docker compose run --rm --no-deps -ePHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer check --using-cache=no --show-progress none
+      - name: phpstan
+        run: docker compose run --rm --no-deps php vendor/bin/phpstan analyze --error-format=github --no-progress -v
+      - name: phpunit
+        run: docker compose run --rm --no-deps php vendor/bin/phpunit --colors=always --no-progress --do-not-cache-result
