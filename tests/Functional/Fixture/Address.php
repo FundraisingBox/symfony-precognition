@@ -7,16 +7,15 @@ namespace FundraisingBox\Precognition\Tests\Functional\Fixture;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Nested value object used to exercise property-path prefix matching
- * (Precognition-Validate-Only: address keeps address.street / address.city).
+ * Value object adapted from Symfony's Valid constraint docs. Public properties
+ * with defaults keep it compatible with #[MapRequestPayload] in this fixture.
  */
 final class Address
 {
-    public function __construct(
-        #[Assert\NotBlank]
-        public string $street = '',
-        #[Assert\NotBlank]
-        public string $city = '',
-    ) {
-    }
+    #[Assert\NotBlank]
+    public string $street = '';
+
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 5)]
+    public string $zipCode = '';
 }
