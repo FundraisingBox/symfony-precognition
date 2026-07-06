@@ -8,25 +8,28 @@ use FundraisingBox\Precognition\Http\PrecognitionRequest;
 use FundraisingBox\Precognition\Validation\ViolationPathFilter;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
 use function count;
 
 /**
- * Implements `Precognition-Validate-Only` (post-validation filtering).
+ * Implements precognitive validation response handling.
  *
- * Runs before the app's `422` renderer. When a precognitive request limits the
- * reported fields, it filters the thrown violation list in place to keep only
- * the requested fields. If nothing remains the fields are valid -> `204`;
- * otherwise the now-filtered exception falls through to the normal `422` render.
+ * Runs before the app's validation error renderer. It normalises precognitive
+ * validation failures to Laravel's `422` protocol status, then applies
+ * `Precognition-Validate-Only` post-validation filtering when requested. If no
+ * selected violations remain the fields are valid -> `204`; otherwise the
+ * now-filtered exception falls through to the normal `422` render.
  *
  * Domain-free: it keys off Symfony's standard {@see ValidationFailedException}.
  * That exception is not always the top-level throwable: `#[MapRequestPayload]`
  * (via `RequestPayloadValueResolver`) wraps it in an `HttpException` and exposes
  * it as `previous`, while custom value resolvers may throw it directly. The
  * listener therefore walks the `getPrevious()` chain to find it. Filtering the
- * list in place is enough because the app's `422` renderer reads that same
+ * list in place is enough because the app's validation renderer reads that same
  * `ConstraintViolationListInterface`.
  */
 final readonly class PrecognitionValidationListener
@@ -44,13 +47,15 @@ final readonly class PrecognitionValidationListener
             return;
         }
 
-        $requestedFields = PrecognitionRequest::validateOnly($request);
-        if ([] === $requestedFields) {
+        $exception = $this->resolveValidationException($event->getThrowable());
+        if (null === $exception) {
             return;
         }
 
-        $exception = $this->resolveValidationException($event->getThrowable());
-        if (null === $exception) {
+        $this->normaliseValidationFailedStatus($event, $exception);
+
+        $requestedFields = PrecognitionRequest::validateOnly($request);
+        if ([] === $requestedFields) {
             return;
         }
 
@@ -66,6 +71,24 @@ final readonly class PrecognitionValidationListener
             // responses produced from an exception to 500.
             $event->allowCustomResponseCode();
         }
+    }
+
+    private function normaliseValidationFailedStatus(ExceptionEvent $event, ValidationFailedException $exception): void
+    {
+        $throwable = $event->getThrowable();
+        if (!$throwable instanceof HttpExceptionInterface) {
+            return;
+        }
+
+        if (Response::HTTP_UNPROCESSABLE_ENTITY === $throwable->getStatusCode()) {
+            return;
+        }
+
+        $event->setThrowable(HttpException::fromStatusCode(
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            $throwable->getMessage(),
+            $exception
+        ));
     }
 
     /**
