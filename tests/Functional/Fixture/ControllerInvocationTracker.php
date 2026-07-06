@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace FundraisingBox\Precognition\Tests\Functional\Fixture;
 
 /**
- * Records how often the controller body actually ran, so tests can assert
- * that a precognitive request never reaches it.
+ * Records how often a controller body actually ran, so tests can assert that a
+ * precognitive request never reaches it.
  */
-final class RegistrationTracker
+final class ControllerInvocationTracker
 {
     private int $count = 0;
 
