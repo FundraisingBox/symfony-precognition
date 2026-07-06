@@ -15,9 +15,8 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function sys_get_temp_dir;
 
 /**
- * Minimal application kernel exercising the bundle end to end: FrameworkBundle,
- * the PrecognitionBundle and a single POST /users endpoint using
- * #[MapRequestPayload].
+ * Minimal application kernel exercising the bundle end to end with
+ * attribute-routed controller fixtures.
  */
 final class TestKernel extends Kernel
 {
@@ -58,18 +57,22 @@ final class TestKernel extends Kernel
 
         $services = $container->services();
 
-        $services->set(RegistrationTracker::class)->public();
+        $services->set(ControllerInvocationTracker::class)->public();
 
-        $services->set(RegistrationController::class)
+        $services->set(UserController::class)
             ->public()
-            ->args([service(RegistrationTracker::class)])
+            ->args([service(ControllerInvocationTracker::class)])
+            ->tag('controller.service_arguments');
+
+        $services->set(AuthorController::class)
+            ->public()
+            ->args([service(ControllerInvocationTracker::class)])
             ->tag('controller.service_arguments');
     }
 
     protected function configureRoutes(RoutingConfigurator $routes): void
     {
-        $routes->add('register', '/users')
-            ->controller(RegistrationController::class)
-            ->methods(['POST']);
+        $routes->import(UserController::class, 'attribute');
+        $routes->import(AuthorController::class, 'attribute');
     }
 }

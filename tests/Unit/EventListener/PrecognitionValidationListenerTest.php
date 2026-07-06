@@ -81,6 +81,42 @@ final class PrecognitionValidationListenerTest extends TestCase
         $this->assertSame('username', $violations->get(0)->getPropertyPath());
     }
 
+    public function testNormalisesWrappedValidationHttpExceptionStatusTo422WithoutValidateOnlyHeader(): void
+    {
+        $violations = $this->violationList('firstName');
+        $wrapped = new HttpException(
+            Response::HTTP_NOT_FOUND,
+            'Validation failed',
+            $this->validationException($violations)
+        );
+
+        $request = new Request();
+        $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
+
+        $event = $this->dispatch($wrapped, $request);
+
+        $throwable = $event->getThrowable();
+        $this->assertInstanceOf(HttpException::class, $throwable);
+        $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $throwable->getStatusCode());
+        $this->assertSame('Validation failed', $throwable->getMessage());
+        $this->assertSame($wrapped->getPrevious(), $throwable->getPrevious());
+        $this->assertNull($event->getResponse());
+    }
+
+    public function testLeavesWrappedValidationHttpExceptionStatus422Untouched(): void
+    {
+        $previous = $this->validationException($this->violationList('firstName'));
+        $wrapped = new HttpException(Response::HTTP_UNPROCESSABLE_ENTITY, 'Validation failed', $previous);
+
+        $request = new Request();
+        $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
+
+        $event = $this->dispatch($wrapped, $request);
+
+        $this->assertSame($wrapped, $event->getThrowable());
+        $this->assertNull($event->getResponse());
+    }
+
     public function testResolvesDeeplyNestedValidationException(): void
     {
         $violations = $this->violationList('email');
