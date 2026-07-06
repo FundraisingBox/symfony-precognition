@@ -5,10 +5,10 @@
 // controller never executes. On submit it runs one final precognitive check of
 // the whole payload, then performs the real POST only if that check passes.
 
-const ENDPOINT = 'http://localhost:8000/users';
+const ENDPOINT = 'http://localhost:8000/user';
 const THROTTLE_MS = 200;
 
-const form = document.getElementById('registration');
+const form = document.getElementById('user');
 const statusLine = document.getElementById('status');
 const inputs = [...form.querySelectorAll('[data-field]')];
 
@@ -17,8 +17,8 @@ const inputs = [...form.querySelectorAll('[data-field]')];
 const inFlight = new Map();
 const timers = new Map();
 
-// Build the request body from the form. Nested paths (address.street) are
-// expanded into nested objects, matching the server DTO.
+// Build the request body from the form. Nested paths are expanded into nested
+// objects when present, matching Symfony DTO property paths.
 function payload() {
   const body = {};
   for (const input of inputs) {
@@ -122,5 +122,5 @@ form.addEventListener('submit', async (event) => {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(payload()),
   });
-  statusLine.textContent = created.ok ? 'Account created.' : 'Submission failed.';
+  statusLine.textContent = created.ok ? 'User created.' : 'Submission failed.';
 });
