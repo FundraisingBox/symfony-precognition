@@ -53,9 +53,13 @@ The `Precognition-Validate-Only` filtering happens at the exception stage:
 Symfony's validator dispatches no events, so there is no validation-time hook to
 filter violations. The listener keys off Symfony's standard
 `ValidationFailedException` — found either as the thrown exception (custom
-resolvers) or in the `getPrevious()` chain (`#[MapRequestPayload]` wraps it in an
-`HttpException`). It filters the standard `ConstraintViolationListInterface` in
-place, so the downstream `422` renderer automatically sees the filtered list.
+resolvers) or in the `getPrevious()` chain (`#[MapRequestPayload]`,
+`#[MapQueryString]` and `#[MapUploadedFile]` wrap it in an `HttpException`). For
+precognitive requests, wrapped validation failures are normalised to `422` before
+rendering; this keeps Laravel-compatible response semantics even though
+Symfony's `#[MapQueryString]` defaults to `404`. The listener then filters the
+standard `ConstraintViolationListInterface` in place, so the downstream `422`
+renderer automatically sees the filtered list.
 
 > [!WARNING]
 > **Only argument-resolution validation runs.** The bundle reuses the
@@ -124,12 +128,30 @@ throws it.
 
 ## Usage
 
-Given a controller that maps and validates its payload:
+Given a DTO and controller that map and validate a payload:
 
 ```php
-final class RegistrationController
+use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class UserDto
 {
-    public function __invoke(#[MapRequestPayload] RegistrationInput $input): Response
+    public function __construct(
+        #[Assert\NotBlank]
+        public string $firstName = '',
+        #[Assert\NotBlank]
+        public string $lastName = '',
+        #[Assert\GreaterThan(18)]
+        public int $age = 0,
+    ) {
+    }
+}
+
+final class UserController
+{
+    #[Route('/user', methods: ['POST'])]
+    public function create(#[MapRequestPayload] UserDto $userDto): Response
     {
         // never runs for a precognitive request
     }
@@ -140,42 +162,89 @@ a client validates it precognitively with the `Precognition` header:
 
 ```bash
 # Success -> 204 No Content
-curl -i -X POST https://example.test/users \
+curl -i -X POST https://example.test/user \
   -H 'Content-Type: application/json' \
   -H 'Precognition: true' \
-  -d '{"username":"alice","email":"alice@example.com","address":{"street":"Main 1","city":"Berlin"}}'
+  -d '{"firstName":"John","lastName":"Smith","age":28}'
 # HTTP/1.1 204 No Content
 # Precognition: true
 # Precognition-Success: true
 # Vary: Precognition
 
 # Failure -> 422 with the app's normal error body
-curl -i -X POST https://example.test/users \
+curl -i -X POST https://example.test/user \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
   -H 'Precognition: true' \
-  -d '{"username":"al","email":"nope","address":{"street":"","city":""}}'
+  -d '{"firstName":"","lastName":"Smith","age":17}'
 # HTTP/1.1 422 Unprocessable Content
 # Precognition: true
 # Vary: Precognition
 
 # Validate only selected fields
-curl -i -X POST https://example.test/users \
+curl -i -X POST https://example.test/user \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
   -H 'Precognition: true' \
-  -H 'Precognition-Validate-Only: username,email' \
+  -H 'Precognition-Validate-Only: firstName,age' \
   -d '{ ... }'
 ```
+
+The same protocol applies to query-string validation:
+
+```php
+use Symfony\Component\HttpKernel\Attribute\MapQueryString;
+
+#[Route('/dashboard', methods: ['GET'])]
+public function dashboard(#[MapQueryString] UserDto $userDto): Response
+{
+    // never runs for a precognitive request
+}
+```
+
+```bash
+curl -i 'https://example.test/dashboard?firstName=&lastName=Smith&age=17' \
+  -H 'Accept: application/json' \
+  -H 'Precognition: true'
+# HTTP/1.1 422 Unprocessable Content
+```
+
+Symfony's `#[MapQueryString]` returns `404` for validation failures by default.
+For precognitive requests only, this bundle rewrites validation failures to
+`422` so query-string validation follows the same wire protocol as payload and
+file validation. Non-precognitive requests keep Symfony's configured status.
+
+Uploaded files work through `#[MapUploadedFile]` as well:
+
+```php
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
+use Symfony\Component\Validator\Constraints as Assert;
+
+#[Route('/user/picture', methods: ['PUT'])]
+public function changePicture(
+    #[MapUploadedFile([
+        new Assert\File(mimeTypes: ['image/png', 'image/jpeg']),
+    ])]
+    UploadedFile $picture,
+): Response {
+    // never runs for a precognitive request
+}
+```
+
+If a file endpoint should be usable precognitively without re-uploading the
+file, make the argument nullable, for example `?UploadedFile $picture = null`.
+A missing non-nullable file is rejected by Symfony with `422` before it creates a
+validation violation list, so `Precognition-Validate-Only` has nothing to filter.
 
 ### `Precognition-Validate-Only`
 
 Field paths use Symfony property-path syntax and are matched by prefix, so
-requesting `address` also keeps violations on `address.city`. Dotted object
-syntax (`address.city`) and bracketed collection syntax (`[address][city]`)
+requesting `address` also keeps violations on `address.zipCode`. Dotted object
+syntax (`address.zipCode`) and bracketed collection syntax (`[address][zipCode]`)
 are normalised to the same path, so either form matches a requested field.
 
-Send DTO property paths (`address.city`), not raw form field names.
+Send DTO property paths (`address.zipCode`), not raw form field names.
 
 ## CORS
 
@@ -203,7 +272,7 @@ validations, and renders the returned violations.
 | [`Http/PrecognitionRequest`](src/Http/PrecognitionRequest.php)              | `isPrecognitive()`, `validateOnly()`                         |
 | [`EventListener/PrecognitionShortCircuitListener`](src/EventListener/PrecognitionShortCircuitListener.php) | `kernel.controller_arguments` → no-op `204` |
 | [`EventListener/PrecognitionResponseListener`](src/EventListener/PrecognitionResponseListener.php) | `kernel.response` → protocol headers                |
-| [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → `Precognition-Validate-Only` filtering |
+| [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → validation status normalisation and `Precognition-Validate-Only` filtering |
 | [`Validation/ViolationPathFilter`](src/Validation/ViolationPathFilter.php)  | Field-path matching                                          |
 
 ## License
