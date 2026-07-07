@@ -6,12 +6,14 @@ namespace FundraisingBox\Precognition\Tests\Unit\EventListener;
 
 use Exception;
 use FundraisingBox\Precognition\EventListener\PrecognitionValidationListener;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
 use FundraisingBox\Precognition\Validation\ViolationPathFilter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -201,7 +203,7 @@ final class PrecognitionValidationListenerTest extends TestCase
             $exception
         );
 
-        (new PrecognitionValidationListener(new ViolationPathFilter()))->onKernelException($event);
+        (new PrecognitionValidationListener(new ViolationPathFilter(), new PrecognitionContext(new RequestStack())))->onKernelException($event);
 
         return $event;
     }
