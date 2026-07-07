@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FundraisingBox\Precognition\Tests\Functional\Fixture;
 
+use FundraisingBox\Precognition\Attribute\Precognitive;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,9 +15,10 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Real controller bodies: they only run for non-precognitive requests, since
- * the short-circuit listener replaces them for precognitive ones.
+ * Real controller bodies: they only run for non-precognitive requests or
+ * routes that do not opt in to precognition.
  */
+#[Precognitive]
 final readonly class UserController
 {
     public function __construct(

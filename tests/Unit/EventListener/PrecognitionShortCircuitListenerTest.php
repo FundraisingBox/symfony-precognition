@@ -22,7 +22,7 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
     public function testReplacesControllerWithNoContentForPrecognitiveRequest(): void
     {
         $originalController = static fn (): Response => throw new RuntimeException('Original controller must not run');
-        $event = $this->createEvent($originalController, $this->precognitiveRequest(), HttpKernelInterface::MAIN_REQUEST);
+        $event = $this->createEvent($originalController, $this->activePrecognitiveRequest(), HttpKernelInterface::MAIN_REQUEST);
 
         $this->listener()->onKernelControllerArguments($event);
 
@@ -43,10 +43,20 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
         $this->assertSame($originalController, $event->getController());
     }
 
+    public function testLeavesControllerIntactForInactivePrecognitiveRequest(): void
+    {
+        $originalController = static fn (): Response => new Response('original');
+        $event = $this->createEvent($originalController, $this->precognitiveRequest(), HttpKernelInterface::MAIN_REQUEST);
+
+        $this->listener()->onKernelControllerArguments($event);
+
+        $this->assertSame($originalController, $event->getController());
+    }
+
     public function testIgnoresSubRequests(): void
     {
         $originalController = static fn (): Response => new Response('original');
-        $event = $this->createEvent($originalController, $this->precognitiveRequest(), HttpKernelInterface::SUB_REQUEST);
+        $event = $this->createEvent($originalController, $this->activePrecognitiveRequest(), HttpKernelInterface::SUB_REQUEST);
 
         $this->listener()->onKernelControllerArguments($event);
 
@@ -61,9 +71,22 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
         return $request;
     }
 
+    private function activePrecognitiveRequest(): Request
+    {
+        $request = $this->precognitiveRequest();
+        $this->context()->activate($request);
+
+        return $request;
+    }
+
     private function listener(): PrecognitionShortCircuitListener
     {
-        return new PrecognitionShortCircuitListener(new PrecognitionContext(new RequestStack()));
+        return new PrecognitionShortCircuitListener($this->context());
+    }
+
+    private function context(): PrecognitionContext
+    {
+        return new PrecognitionContext(new RequestStack());
     }
 
     private function createEvent(callable $controller, Request $request, int $requestType): ControllerArgumentsEvent

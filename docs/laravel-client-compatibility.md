@@ -24,7 +24,7 @@ The bundle already satisfies everything the SDK checks on the protocol level:
   what the short-circuit flow produces.
 - **Request format.** The client sends `Precognition: true` and, when validating
   a subset, `Precognition-Validate-Only` as a comma-joined list. The bundle's
-  `PrecognitionRequest` parses precisely that. (Wildcards such as `items.*.name`
+  `PrecognitionContext` parses precisely that. (Wildcards such as `items.*.name`
   are expanded client-side, so the server only ever sees concrete paths.)
 
 ## What breaks
@@ -74,13 +74,13 @@ The mapping required to bridge the two shapes:
 
 ### App-side listener (recommended)
 
-Add an exception listener in your application that rewrites precognitive `422`
-responses into the Laravel shape. It runs after this bundle's validate-only
-filter (priority `20`) and before Symfony's error renderer, so it sees the
-already-filtered violation list.
+Add an exception listener in your application that rewrites active precognitive
+`422` responses into the Laravel shape. It runs after this bundle's
+validate-only filter (priority `20`) and before Symfony's error renderer, so it
+sees the already-filtered violation list.
 
 ```php
-use FundraisingBox\Precognition\Http\PrecognitionRequest;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -91,9 +91,14 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 #[AsEventListener(event: KernelEvents::EXCEPTION, priority: 10)]
 final class LaravelErrorResponseListener
 {
+    public function __construct(
+        private readonly PrecognitionContext $precognition,
+    ) {
+    }
+
     public function __invoke(ExceptionEvent $event): void
     {
-        if (!PrecognitionRequest::isPrecognitive($event->getRequest())) {
+        if (!$this->precognition->isActive($event->getRequest())) {
             return;
         }
 
@@ -146,5 +151,5 @@ unless the application formats those responses too.
 
 If demand appears, the bridge could become an opt-in bundle feature (for
 example an `error_format: laravel` option that registers such a listener). It is
-deliberately out of scope for now — the bundle stays configuration-free and
-framework-idiomatic, emitting Symfony's standard problem+json.
+deliberately out of scope for now — the bundle stays framework-idiomatic,
+emitting Symfony's standard problem+json.

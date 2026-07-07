@@ -94,6 +94,7 @@ final class PrecognitionValidationListenerTest extends TestCase
 
         $request = new Request();
         $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
+        $this->context()->activate($request);
 
         $event = $this->dispatch($wrapped, $request);
 
@@ -112,6 +113,7 @@ final class PrecognitionValidationListenerTest extends TestCase
 
         $request = new Request();
         $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
+        $this->context()->activate($request);
 
         $event = $this->dispatch($wrapped, $request);
 
@@ -164,6 +166,7 @@ final class PrecognitionValidationListenerTest extends TestCase
         $violations = $this->violationList('email');
         $request = new Request();
         $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
+        $this->context()->activate($request);
 
         $event = $this->dispatch($this->validationException($violations), $request);
 
@@ -203,7 +206,7 @@ final class PrecognitionValidationListenerTest extends TestCase
             $exception
         );
 
-        (new PrecognitionValidationListener(new ViolationPathFilter(), new PrecognitionContext(new RequestStack())))->onKernelException($event);
+        (new PrecognitionValidationListener(new ViolationPathFilter(), $this->context()))->onKernelException($event);
 
         return $event;
     }
@@ -213,8 +216,14 @@ final class PrecognitionValidationListenerTest extends TestCase
         $request = new Request();
         $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
         $request->headers->set(PrecognitionHeaders::VALIDATE_ONLY, $validateOnly);
+        $this->context()->activate($request);
 
         return $request;
+    }
+
+    private function context(): PrecognitionContext
+    {
+        return new PrecognitionContext(new RequestStack());
     }
 
     private function createKernelStub(): HttpKernelInterface

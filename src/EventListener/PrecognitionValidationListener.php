@@ -44,7 +44,7 @@ final readonly class PrecognitionValidationListener
     {
         $request = $event->getRequest();
 
-        if (!$this->precognitionContext->isPrecognitive($request)) {
+        if (!$this->precognitionContext->isActive($request)) {
             return;
         }
 
