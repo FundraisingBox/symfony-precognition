@@ -20,7 +20,7 @@ use function sys_get_temp_dir;
  * Minimal application kernel exercising the bundle end to end with
  * attribute-routed controller fixtures.
  */
-final class TestKernel extends Kernel
+class TestKernel extends Kernel
 {
     use MicroKernelTrait;
 
@@ -35,7 +35,7 @@ final class TestKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/precognition-bundle-test/cache/' . $this->getEnvironment();
+        return sys_get_temp_dir() . '/precognition-bundle-test/cache/' . strtr(static::class, '\\', '_') . '/' . $this->getEnvironment();
     }
 
     public function getLogDir(): string

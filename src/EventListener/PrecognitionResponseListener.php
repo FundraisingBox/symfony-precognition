@@ -28,7 +28,7 @@ final readonly class PrecognitionResponseListener
             return;
         }
 
-        if (!$this->precognitionContext->isPrecognitive($event->getRequest())) {
+        if (!$this->precognitionContext->isActive($event->getRequest())) {
             return;
         }
 

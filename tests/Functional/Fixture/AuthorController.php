@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FundraisingBox\Precognition\Tests\Functional\Fixture;
 
+use FundraisingBox\Precognition\Attribute\Precognitive;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
@@ -17,6 +18,7 @@ final readonly class AuthorController
     }
 
     #[Route('/authors', methods: ['POST'])]
+    #[Precognitive]
     public function create(#[MapRequestPayload] Author $author): Response
     {
         $this->tracker->record();
