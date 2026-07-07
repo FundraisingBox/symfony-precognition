@@ -1,126 +1,127 @@
 // Dependency-free client for the Symfony Precognition bundle.
 //
-// It validates each field as the user leaves it, without submitting the form:
-// a precognitive POST (Precognition: true) runs server-side validation but the
-// controller never executes. On submit it runs one final precognitive check of
-// the whole payload, then performs the real POST only if that check passes.
+// The backend is the bundle's functional-test fixture:
+//   - UserController::create() — POST /user, #[Precognitive] + #[MapRequestPayload]
+//     (tests/Functional/Fixture/UserController.php)
+//   - UserDto — firstName/lastName (NotBlank), age (int, GreaterThan(18))
+//     (tests/Functional/Fixture/UserDto.php)
+//
+// Each field is validated as the user leaves it: a precognitive POST
+// (Precognition: true) runs server-side validation but the controller never
+// executes. On submit, one final precognitive check covers the whole payload,
+// then the real POST runs only if that check passed.
 
 const ENDPOINT = 'http://localhost:8000/user';
-const THROTTLE_MS = 200;
+const DEBOUNCE_MS = 200;
 
 const form = document.getElementById('user');
 const statusLine = document.getElementById('status');
-const inputs = [...form.querySelectorAll('[data-field]')];
 
-// One AbortController and one debounce timer per field, so a newer keystroke
-// cancels the previous in-flight validation for that same field.
-const inFlight = new Map();
-const timers = new Map();
+// --- Payload ----------------------------------------------------------------
 
-// Build the request body from the form. Nested paths are expanded into nested
-// objects when present, matching Symfony DTO property paths.
+// #[MapRequestPayload] deserializes this JSON into UserDto, whose `age` is
+// typed int — a string would be rejected as a type error, so coerce it.
 function payload() {
-  const body = {};
-  for (const input of inputs) {
-    const segments = input.dataset.field.split('.');
-    let target = body;
-    while (segments.length > 1) {
-      const key = segments.shift();
-      target = target[key] ??= {};
-    }
-    target[segments[0]] = input.value;
-  }
-  return body;
+  const fields = Object.fromEntries(new FormData(form));
+  return JSON.stringify({ ...fields, age: Number(fields.age) });
 }
 
+// --- Error rendering ---------------------------------------------------------
+
+// Error slots are keyed by the DTO property path (data-error-for="age" etc.).
 function setError(field, message) {
   const slot = form.querySelector(`[data-error-for="${field}"]`);
   if (slot) slot.textContent = message ?? '';
 }
 
-function clearErrors(fields) {
-  for (const field of fields) setError(field, null);
+function clearAllErrors() {
+  for (const slot of form.querySelectorAll('.error')) slot.textContent = '';
 }
 
-// Send a precognitive request. `only` limits which fields are reported via the
-// Precognition-Validate-Only header; omit it to validate the whole payload.
-async function precognite(only) {
-  const key = only ? only.join(',') : '*';
+// --- Precognitive requests ---------------------------------------------------
 
-  // Cancel any earlier validation covering the same field(s).
-  inFlight.get(key)?.abort();
+// One AbortController per validation scope ('*' = whole payload), so a newer
+// check cancels the in-flight one it supersedes.
+const inFlight = new Map();
+
+// Ask the server to validate without executing the controller. `only` limits
+// the reported violations to one field via Precognition-Validate-Only.
+// Returns the violations — [] means the server answered 204 (valid).
+async function requestValidation(only) {
+  const scope = only ?? '*';
+  inFlight.get(scope)?.abort();
   const controller = new AbortController();
-  inFlight.set(key, controller);
+  inFlight.set(scope, controller);
 
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
     Precognition: 'true',
   };
-  if (only) headers['Precognition-Validate-Only'] = only.join(',');
+  if (only) headers['Precognition-Validate-Only'] = only;
 
-  const response = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload()),
-    signal: controller.signal,
-  });
-
-  inFlight.delete(key);
-  return response;
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers,
+      body: payload(),
+      signal: controller.signal,
+    });
+    if (response.status === 204) return [];
+    const body = await response.json().catch(() => null);
+    return body?.violations ?? [];
+  } finally {
+    if (inFlight.get(scope) === controller) inFlight.delete(scope);
+  }
 }
 
-// Read { violations: [{ propertyPath, title }] } from a 422 problem+json body.
-async function violations(response) {
-  const body = await response.json().catch(() => null);
-  return body?.violations ?? [];
-}
+// --- Per-field validation on blur, debounced ----------------------------------
 
-// Validate a single field on blur, debounced.
+const debounceTimers = new Map();
+
 function scheduleFieldValidation(field) {
-  clearTimeout(timers.get(field));
-  timers.set(
-    field,
-    setTimeout(async () => {
-      try {
-        const response = await precognite([field]);
-        if (response.status === 204) {
-          setError(field, null);
-          return;
-        }
-        const matching = (await violations(response)).filter((v) => v.propertyPath === field);
-        setError(field, matching[0]?.title ?? null);
-      } catch (error) {
-        if (error.name !== 'AbortError') throw error; // ignore superseded requests
-      }
-    }, THROTTLE_MS),
-  );
+  clearTimeout(debounceTimers.get(field));
+  debounceTimers.set(field, setTimeout(() => validateField(field), DEBOUNCE_MS));
 }
 
-for (const input of inputs) {
-  input.addEventListener('blur', () => scheduleFieldValidation(input.dataset.field));
+async function validateField(field) {
+  try {
+    const violations = await requestValidation(field);
+    setError(field, violations.find((v) => v.propertyPath === field)?.title);
+  } catch (error) {
+    if (error.name !== 'AbortError') throw error; // aborted = superseded, ignore
+  }
 }
 
-// On submit: one full precognitive check, then the real POST if it passed.
+form.addEventListener('focusout', (event) => {
+  if (event.target.name) scheduleFieldValidation(event.target.name);
+});
+
+// --- Submit -------------------------------------------------------------------
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   statusLine.textContent = '';
-  clearErrors(inputs.map((i) => i.dataset.field));
+  clearAllErrors();
 
-  const check = await precognite();
-  if (check.status !== 204) {
-    for (const violation of await violations(check)) {
-      setError(violation.propertyPath, violation.title);
-    }
+  let violations;
+  try {
+    violations = await requestValidation();
+  } catch (error) {
+    if (error.name === 'AbortError') return; // superseded by a newer submit
+    throw error;
+  }
+
+  if (violations.length > 0) {
+    for (const violation of violations) setError(violation.propertyPath, violation.title);
     return;
   }
 
-  // Valid: perform the real submission (no Precognition header, so the
-  // controller runs).
-  const created = await fetch(ENDPOINT, {
+  // Valid: real POST — no Precognition header, so UserController::create() runs.
+  const response = await fetch(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload()),
+    body: payload(),
   });
-  statusLine.textContent = created.ok ? 'User created.' : 'Submission failed.';
+  statusLine.textContent = response.ok ? 'User created.' : 'Submission failed.';
 });
