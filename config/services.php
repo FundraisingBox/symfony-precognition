@@ -61,8 +61,8 @@ return static function (ContainerConfigurator $configurator): void {
             'priority' => -64,
         ]);
 
-    // Before the app's own 422 renderer (typically priority 10 or lower), so the
-    // violation list is filtered before it is rendered.
+    // Before the app's own validation renderer (typically priority 10 or lower),
+    // so the violation list is filtered before it is rendered.
     $services->set(PrecognitionValidationListener::class)
         ->args([service(ViolationPathFilter::class), service(PrecognitionContext::class)])
         ->tag('kernel.event_listener', [

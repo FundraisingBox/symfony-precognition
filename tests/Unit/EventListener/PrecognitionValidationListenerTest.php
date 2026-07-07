@@ -83,7 +83,7 @@ final class PrecognitionValidationListenerTest extends TestCase
         $this->assertSame('username', $violations->get(0)->getPropertyPath());
     }
 
-    public function testNormalisesWrappedValidationHttpExceptionStatusTo422WithoutValidateOnlyHeader(): void
+    public function testLeavesWrappedValidationHttpExceptionStatusUntouchedWithoutValidateOnlyHeader(): void
     {
         $violations = $this->violationList('firstName');
         $wrapped = new HttpException(
@@ -98,11 +98,7 @@ final class PrecognitionValidationListenerTest extends TestCase
 
         $event = $this->dispatch($wrapped, $request);
 
-        $throwable = $event->getThrowable();
-        $this->assertInstanceOf(HttpException::class, $throwable);
-        $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $throwable->getStatusCode());
-        $this->assertSame('Validation failed', $throwable->getMessage());
-        $this->assertSame($wrapped->getPrevious(), $throwable->getPrevious());
+        $this->assertSame($wrapped, $event->getThrowable());
         $this->assertNull($event->getResponse());
     }
 

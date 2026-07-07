@@ -23,13 +23,13 @@ final class PrecognitionMapQueryStringTest extends WebTestCase
         $this->assertSame(0, $this->trackerCount());
     }
 
-    public function testPrecognitiveInvalidQueryStringReturns422InsteadOfMapQueryStringDefault404(): void
+    public function testPrecognitiveInvalidQueryStringKeepsMapQueryStringDefault404(): void
     {
         $client = self::createClient();
 
         $client->request('GET', '/dashboard', $this->invalidQuery(), [], $this->precognitive());
 
-        $this->assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
         $this->assertSame(['firstName', 'age'], $this->violationPropertyPaths($client->getResponse()));
         $this->assertSame(0, $this->trackerCount());
     }
@@ -49,7 +49,7 @@ final class PrecognitionMapQueryStringTest extends WebTestCase
 
         $client->request('GET', '/dashboard', $this->invalidQuery(), [], $this->precognitive('age'));
 
-        $this->assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
         $this->assertSame(['age'], $this->violationPropertyPaths($client->getResponse()));
     }
 
