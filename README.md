@@ -8,7 +8,9 @@ controller runs, so a client can validate input — for example live form
 validation — without creating or mutating anything.
 
 - validation passes → `204 No Content` + `Precognition-Success: true`
-- validation fails → the application's normal validation error response (`422`)
+- validation fails → the application's normal validation error response
+  (`422` for `#[MapRequestPayload]`; `404` for Symfony's default
+  `#[MapQueryString]`)
 - every precognitive response also carries `Precognition: true` and
   `Vary: Precognition`
 - optional `Precognition-Validate-Only: a,b` limits which fields are reported
@@ -51,7 +53,7 @@ success the short-circuit listener replaces the controller with a no-op `204`.
                                 ▼                            ▼
                         controller skipped             kernel.exception
                                 │            PrecognitionValidationListener (prio 20)
-                                │            then the app's 422 renderer
+                                │            then the app's validation renderer
                                 └──────────────┬─────────────┘
                                                ▼
                                           kernel.response
@@ -66,11 +68,11 @@ filter violations. The listener keys off Symfony's standard
 `ValidationFailedException` — found either as the thrown exception (custom
 resolvers) or in the `getPrevious()` chain (`#[MapRequestPayload]`,
 `#[MapQueryString]` and `#[MapUploadedFile]` wrap it in an `HttpException`). For
-precognitive requests, wrapped validation failures are normalised to `422` before
-rendering; this keeps Laravel-compatible response semantics even though
-Symfony's `#[MapQueryString]` defaults to `404`. The listener then filters the
-standard `ConstraintViolationListInterface` in place, so the downstream `422`
-renderer automatically sees the filtered list.
+precognitive requests, the wrapped exception's original status is kept. That
+means Symfony's `#[MapQueryString]` default `404` remains `404`, while
+`#[MapRequestPayload]` validation failures normally remain `422`. The listener
+then filters the standard `ConstraintViolationListInterface` in place, so the
+downstream validation renderer automatically sees the filtered list.
 
 > [!WARNING]
 > **Only opted-in precognition requests short-circuit.** Sending
@@ -96,8 +98,9 @@ This bundle ports the request/response protocol of
 [Laravel Precognition](https://github.com/laravel/precognition), also described
 for Rails by [Inertia Precognition](https://inertia-rails.dev/guide/precognition).
 The wire protocol — the `Precognition`, `Precognition-Success` and
-`Precognition-Validate-Only` headers and the `204`/`422` status codes — matches,
-so the same ideas and much of the same frontend behaviour apply.
+`Precognition-Validate-Only` headers and the success response — matches, so the
+same ideas and much of the same frontend behaviour apply. Validation error
+status codes remain Symfony's native statuses for the resolver in use.
 
 ### Differences from Laravel Precognition
 
@@ -112,15 +115,17 @@ so the same ideas and much of the same frontend behaviour apply.
   conditional logic in form requests. Symfony requests cannot safely grow bundle
   methods, so inject `PrecognitionContext` and call
   `$precognition->isPrecognitive()` instead.
-- **Error body shape.** The `422` body is whatever your application's renderer
-  produces (Symfony `problem+json` by default), not Laravel's
+- **Error status and body shape.** Validation failures keep Symfony's native
+  status for the resolver in use (`422` for `#[MapRequestPayload]`, `404` for
+  default `#[MapQueryString]`). The body is whatever your application's
+  renderer produces (Symfony `problem+json` by default), not Laravel's
   `{errors: {field: [...]}}` shape.
 
 > [!WARNING]
 > The official `laravel-precognition-vue` / `-react` / `-alpine` SDKs are **not**
-> drop-in compatible. Headers and status codes match, so they appear to work,
-> but they read `response.data.errors` — which Symfony's `422` body does not
-> contain — so forms display no field errors. See
+> drop-in compatible. They read `response.data.errors` — which Symfony's
+> validation error body does not contain — so forms display no field errors.
+> Query-string validation can also return Symfony's default `404`. See
 > [docs/laravel-client-compatibility.md](docs/laravel-client-compatibility.md)
 > for the details and a bridge recipe.
 
@@ -247,13 +252,13 @@ public function dashboard(#[MapQueryString] UserDto $userDto): Response
 curl -i 'https://example.test/dashboard?firstName=&lastName=Smith&age=17' \
   -H 'Accept: application/json' \
   -H 'Precognition: true'
-# HTTP/1.1 422 Unprocessable Content
+# HTTP/1.1 404 Not Found
 ```
 
 Symfony's `#[MapQueryString]` returns `404` for validation failures by default.
-For precognitive requests only, this bundle rewrites validation failures to
-`422` so query-string validation follows the same wire protocol as payload and
-file validation. Non-precognitive requests keep Symfony's configured status.
+Precognitive requests keep that built-in status code. If your application
+configures a different `validationFailedStatusCode` on `#[MapQueryString]`,
+precognitive requests keep that configured status as well.
 
 Uploaded files work through `#[MapUploadedFile]` as well:
 
@@ -395,7 +400,7 @@ validations, and renders the returned violations.
 | [`EventListener/PrecognitionShortCircuitListener`](src/EventListener/PrecognitionShortCircuitListener.php) | `kernel.controller_arguments` → no-op `204` |
 | [`EventListener/PrecognitionFormValidationListener`](src/EventListener/PrecognitionFormValidationListener.php) | `kernel.controller_arguments` → opt-in Symfony Form validation |
 | [`EventListener/PrecognitionResponseListener`](src/EventListener/PrecognitionResponseListener.php) | `kernel.response` → protocol headers                |
-| [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → validation status normalisation and `Precognition-Validate-Only` filtering |
+| [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → `Precognition-Validate-Only` filtering |
 | [`Form/FormErrorViolationMapper`](src/Form/FormErrorViolationMapper.php)  | Symfony Form errors → constraint violations          |
 | [`Validation/ViolationPathFilter`](src/Validation/ViolationPathFilter.php)  | Field-path matching                                          |
 

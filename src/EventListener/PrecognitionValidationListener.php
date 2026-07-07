@@ -8,8 +8,6 @@ use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Validation\ViolationPathFilter;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
-use Symfony\Component\HttpKernel\Exception\HttpException;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
@@ -18,11 +16,10 @@ use function count;
 /**
  * Implements precognitive validation response handling.
  *
- * Runs before the app's validation error renderer. It normalises precognitive
- * validation failures to Laravel's `422` protocol status, then applies
+ * Runs before the app's validation error renderer and applies
  * `Precognition-Validate-Only` post-validation filtering when requested. If no
  * selected violations remain the fields are valid -> `204`; otherwise the
- * now-filtered exception falls through to the normal `422` render.
+ * now-filtered exception falls through to the normal validation render.
  *
  * Domain-free: it keys off Symfony's standard {@see ValidationFailedException}.
  * That exception is not always the top-level throwable: `#[MapRequestPayload]`
@@ -53,8 +50,6 @@ final readonly class PrecognitionValidationListener
             return;
         }
 
-        $this->normaliseValidationFailedStatus($event, $exception);
-
         $requestedFields = $this->precognitionContext->validateOnly($request);
         if ([] === $requestedFields) {
             return;
@@ -74,28 +69,10 @@ final readonly class PrecognitionValidationListener
         }
     }
 
-    private function normaliseValidationFailedStatus(ExceptionEvent $event, ValidationFailedException $exception): void
-    {
-        $throwable = $event->getThrowable();
-        if (!$throwable instanceof HttpExceptionInterface) {
-            return;
-        }
-
-        if (Response::HTTP_UNPROCESSABLE_ENTITY === $throwable->getStatusCode()) {
-            return;
-        }
-
-        $event->setThrowable(new HttpException(
-            Response::HTTP_UNPROCESSABLE_ENTITY,
-            $throwable->getMessage(),
-            $exception
-        ));
-    }
-
     /**
      * Finds the standard validation exception in the throwable chain, whether
      * it is the thrown exception itself (custom resolvers) or wrapped as a
-     * previous exception (`#[MapRequestPayload]`).
+     * previous exception (`#[MapRequestPayload]`, `#[MapQueryString]`, etc.).
      */
     private function resolveValidationException(Throwable $throwable): ?ValidationFailedException
     {

@@ -4,17 +4,18 @@
 
 The official Laravel Precognition frontend SDKs — `laravel-precognition-vue`,
 `laravel-precognition-react`, `laravel-precognition-alpine` and their framework
-variants — are **not** drop-in compatible with this bundle. The wire protocol
-(headers and status codes) matches, so the SDKs appear to work, but the JSON
-body of a `422` response does not match what they parse, so **no field errors
-are ever shown**.
+variants — are **not** drop-in compatible with this bundle. The success
+protocol matches, so the SDKs appear to work, but Symfony validation failures
+keep their native status codes and body shape. The JSON body of a validation
+error response does not match what the SDKs parse, so **no field errors are
+ever shown**.
 
 This document explains the mismatch and how to bridge it. The bundle itself
 ships no Laravel-compatible error formatter.
 
 ## What matches
 
-The bundle already satisfies everything the SDK checks on the protocol level:
+The bundle satisfies the success-side protocol checks used by the SDK:
 
 - **Response header `Precognition: true`.** The client throws
   `Did not receive a Precognition response ...` if it is missing. The bundle's
@@ -42,9 +43,9 @@ name to an array of message strings, with dot-notation keys.
 }
 ```
 
-Symfony's default `422` (produced by `#[MapRequestPayload]` and rendered as
-`application/problem+json`) instead ships a `violations` array of objects, with
-no `errors` key at all.
+Symfony's default validation response instead ships a `violations` array of
+objects, with no `errors` key at all. `#[MapRequestPayload]` usually produces
+`422`; `#[MapQueryString]` defaults to `404`.
 
 ```json
 {
@@ -75,9 +76,9 @@ The mapping required to bridge the two shapes:
 ### App-side listener (recommended)
 
 Add an exception listener in your application that rewrites active precognitive
-`422` responses into the Laravel shape. It runs after this bundle's
-validate-only filter (priority `20`) and before Symfony's error renderer, so it
-sees the already-filtered violation list.
+validation failures into the Laravel shape and status. It runs after this
+bundle's validate-only filter (priority `20`) and before Symfony's error
+renderer, so it sees the already-filtered violation list.
 
 ```php
 use FundraisingBox\Precognition\Http\PrecognitionContext;
@@ -137,8 +138,9 @@ final class LaravelErrorResponseListener
 ### Client-side interceptor (alternative)
 
 If you cannot change the server, add an axios response interceptor that rewrites
-`violations` into `errors` before the SDK sees the response. This keeps the
-change per-frontend and needs no server code.
+`violations` into `errors` before the SDK sees the response. Query-string
+endpoints may also need to treat Symfony's default `404` as a validation
+response. This keeps the change per-frontend and needs no server code.
 
 ## Submit caveat
 
