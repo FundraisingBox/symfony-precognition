@@ -3,3 +3,11 @@ parameters:
     paths:
         - src/
         - tests/
+    ignoreErrors:
+        # MapUploadedFile was added in Symfony 7.1, so it does not exist on the
+        # oldest supported version (6.4). reportUnmatched keeps this from failing
+        # on newer Symfony versions where the attribute is available.
+        -
+            message: '#Attribute class Symfony\\Component\\HttpKernel\\Attribute\\MapUploadedFile does not exist\.#'
+            path: tests/Functional/Fixture/UserController.php
+            reportUnmatched: false
