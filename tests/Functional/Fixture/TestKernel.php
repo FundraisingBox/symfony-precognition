@@ -10,6 +10,8 @@ use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
+use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function sys_get_temp_dir;
@@ -50,6 +52,9 @@ final class TestKernel extends Kernel
             'handle_all_throwables' => true,
             'php_errors'            => ['log' => false],
             'validation'            => ['enable_attributes' => true],
+            'form'                  => true,
+            'session'               => ['storage_factory_id' => 'session.storage.factory.mock_file'],
+            'csrf_protection'       => true,
             'serializer'            => ['enabled' => true],
             'property_access'       => true,
             'router'                => ['utf8' => true],
@@ -68,11 +73,27 @@ final class TestKernel extends Kernel
             ->public()
             ->args([service(ControllerInvocationTracker::class)])
             ->tag('controller.service_arguments');
+
+        $services->set(TaskController::class)
+            ->public()
+            ->args([
+                service(ControllerInvocationTracker::class),
+                service(FormFactoryInterface::class),
+                service(CsrfTokenManagerInterface::class),
+            ])
+            ->tag('controller.service_arguments');
+
+        $services->set(ClassLevelTaskController::class)
+            ->public()
+            ->args([service(ControllerInvocationTracker::class)])
+            ->tag('controller.service_arguments');
     }
 
     protected function configureRoutes(RoutingConfigurator $routes): void
     {
         $routes->import(UserController::class, 'attribute');
         $routes->import(AuthorController::class, 'attribute');
+        $routes->import(TaskController::class, 'attribute');
+        $routes->import(ClassLevelTaskController::class, 'attribute');
     }
 }

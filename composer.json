@@ -17,11 +17,16 @@
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^10.5",
         "symfony/browser-kit": "^6.4 || ^7.0 || ^8.0",
+        "symfony/form": "^6.4 || ^7.0 || ^8.0",
         "symfony/framework-bundle": "^6.4 || ^7.0 || ^8.0",
         "symfony/property-access": "^6.4 || ^7.0 || ^8.0",
         "symfony/property-info": "^6.4 || ^7.0 || ^8.0",
+        "symfony/security-csrf": "^6.4 || ^7.0 || ^8.0",
         "symfony/serializer": "^6.4 || ^7.0 || ^8.0",
         "symfony/mime": "^6.4 || ^7.0 || ^8.0"
+    },
+    "suggest": {
+        "symfony/form": "To validate Symfony Forms precognitively via #[PrecognitiveForm]"
     },
     "autoload": {
         "psr-4": {

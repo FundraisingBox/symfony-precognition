@@ -2,9 +2,10 @@
 
 A Symfony bundle that validates a request without executing the controller
 body. A _precognitive_ request runs the normal argument-resolution validation
-(`#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver), then
-short-circuits before the controller runs, so a client can validate input — for
-example live form validation — without creating or mutating anything.
+(`#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver) or an
+opt-in Symfony Form via `#[PrecognitiveForm]`, then short-circuits before the
+controller runs, so a client can validate input — for example live form
+validation — without creating or mutating anything.
 
 - validation passes → `204 No Content` + `Precognition-Success: true`
 - validation fails → the application's normal validation error response (`422`)
@@ -12,8 +13,11 @@ example live form validation — without creating or mutating anything.
   `Vary: Precognition`
 - optional `Precognition-Validate-Only: a,b` limits which fields are reported
 
-The behaviour is **global and header-driven**: any endpoint can be used
-precognitively by sending `Precognition: true`. There is no per-endpoint opt-in.
+The behaviour is **global and header-driven** for validation that already runs
+during argument resolution: any such endpoint can be used precognitively by
+sending `Precognition: true`. Symfony Forms are different because their
+validation normally runs inside the controller body; form endpoints opt in with
+`#[PrecognitiveForm]`.
 
 ## How it works
 
@@ -31,7 +35,8 @@ success the short-circuit listener replaces the controller with a no-op `204`.
                                     ▼
  kernel.controller_arguments  ┌────────────────────────────────────────┐
    MapRequestPayload validation │ runs here (this event, priority 0)     │
-   PrecognitionShortCircuit      │ runs AFTER it (priority -64)           │
+   PrecognitiveForm validation  │ runs after it (priority -32, opt-in)   │
+   PrecognitionShortCircuit      │ runs after both (priority -64)         │
                                 └───────────────────┬────────────────────┘
                           valid │                            │ invalid
                                 ▼                            ▼
@@ -65,10 +70,11 @@ renderer automatically sees the filtered list.
 > **Only argument-resolution validation runs.** The bundle reuses the
 > validation performed while resolving controller arguments —
 > `#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver that
-> throws `ValidationFailedException`. Validation or business rules executed
-> **inside the controller body** (or in a handler behind it) never run for a
-> precognitive request. A `204` therefore means "the payload is structurally
-> valid", not "this operation would succeed".
+> throws `ValidationFailedException` — plus explicitly annotated Symfony Forms.
+> Other validation or business rules executed **inside the controller body** (or
+> in a handler behind it) never run for a precognitive request. A `204`
+> therefore means "the payload is structurally valid", not "this operation
+> would succeed".
 
 ## Prior art
 
@@ -120,11 +126,18 @@ return [
 ];
 ```
 
-There is nothing to configure and nothing to wire per endpoint. The only
+There is nothing to configure for argument-resolution validation. The only
 requirement is that the validation exception raised during argument resolution
 is (or wraps, as previous) Symfony's standard `ValidationFailedException` —
 which is the case for `#[MapRequestPayload]` and for any custom resolver that
 throws it.
+
+Install `symfony/form` as well if you want to validate Symfony Forms
+precognitively:
+
+```bash
+composer require symfony/form
+```
 
 ## Usage
 
@@ -237,6 +250,37 @@ file, make the argument nullable, for example `?UploadedFile $picture = null`.
 A missing non-nullable file is rejected by Symfony with `422` before it creates a
 validation violation list, so `Precognition-Validate-Only` has nothing to filter.
 
+### Symfony Forms
+
+Classic Symfony Forms validate in the controller body when
+`$form->handleRequest($request)` submits the form. A global precognitive
+short-circuit would otherwise skip that code and return a false `204`, so form
+support is opt-in per endpoint:
+
+```php
+use FundraisingBox\Precognition\Attribute\PrecognitiveForm;
+use Symfony\Component\Routing\Attribute\Route;
+
+#[Route('/task/new', methods: ['POST'])]
+#[PrecognitiveForm(TaskType::class)]
+public function new(Request $request): Response
+{
+    $form = $this->createForm(TaskType::class, new Task());
+    $form->handleRequest($request);
+
+    // never runs for a precognitive request
+}
+```
+
+For a precognitive request, the bundle creates the annotated form type, disables
+CSRF on that validation-only instance, submits the request payload, and converts
+form errors into Symfony constraint violations. Normal, non-precognitive
+submits still run your controller and keep the form's real CSRF behavior.
+
+Form violation paths use field names without the root form prefix. For a form
+named `task`, an invalid `task[task]` input is reported as `task`, and
+`Precognition-Validate-Only: task` matches it.
+
 ### `Precognition-Validate-Only`
 
 Field paths use Symfony property-path syntax and are matched by prefix, so
@@ -244,7 +288,9 @@ requesting `address` also keeps violations on `address.zipCode`. Dotted object
 syntax (`address.zipCode`) and bracketed collection syntax (`[address][zipCode]`)
 are normalised to the same path, so either form matches a requested field.
 
-Send DTO property paths (`address.zipCode`), not raw form field names.
+For DTO/query/file validation, send DTO property paths (`address.zipCode`), not
+raw form field names. For `#[PrecognitiveForm]`, send rootless form field paths
+(`task`, `category.name`).
 
 ## CORS
 
@@ -271,8 +317,10 @@ validations, and renders the returned violations.
 | [`Http/PrecognitionHeaders`](src/Http/PrecognitionHeaders.php)              | Header-name and value constants                              |
 | [`Http/PrecognitionRequest`](src/Http/PrecognitionRequest.php)              | `isPrecognitive()`, `validateOnly()`                         |
 | [`EventListener/PrecognitionShortCircuitListener`](src/EventListener/PrecognitionShortCircuitListener.php) | `kernel.controller_arguments` → no-op `204` |
+| [`EventListener/PrecognitionFormValidationListener`](src/EventListener/PrecognitionFormValidationListener.php) | `kernel.controller_arguments` → opt-in Symfony Form validation |
 | [`EventListener/PrecognitionResponseListener`](src/EventListener/PrecognitionResponseListener.php) | `kernel.response` → protocol headers                |
 | [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → validation status normalisation and `Precognition-Validate-Only` filtering |
+| [`Form/FormErrorViolationMapper`](src/Form/FormErrorViolationMapper.php)  | Symfony Form errors → constraint violations          |
 | [`Validation/ViolationPathFilter`](src/Validation/ViolationPathFilter.php)  | Field-path matching                                          |
 
 ## License
