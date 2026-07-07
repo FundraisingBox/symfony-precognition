@@ -8,11 +8,19 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
 
 #[CoversNothing]
 final class PrecognitionMapUploadedFileTest extends WebTestCase
 {
     use PrecognitionFunctionalTestHelpers;
+
+    protected function setUp(): void
+    {
+        if (!class_exists(MapUploadedFile::class)) {
+            self::markTestSkipped('MapUploadedFile is only available since Symfony 7.1.');
+        }
+    }
 
     public function testPrecognitiveValidPngReturns204AndDoesNotRunController(): void
     {
