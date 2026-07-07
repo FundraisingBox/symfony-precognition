@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FundraisingBox\Precognition\EventListener;
 
-use FundraisingBox\Precognition\Http\PrecognitionRequest;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Validation\ViolationPathFilter;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
@@ -35,7 +35,8 @@ use function count;
 final readonly class PrecognitionValidationListener
 {
     public function __construct(
-        private ViolationPathFilter $violationPathFilter
+        private ViolationPathFilter $violationPathFilter,
+        private PrecognitionContext $precognitionContext,
     ) {
     }
 
@@ -43,7 +44,7 @@ final readonly class PrecognitionValidationListener
     {
         $request = $event->getRequest();
 
-        if (!PrecognitionRequest::isPrecognitive($request)) {
+        if (!$this->precognitionContext->isPrecognitive($request)) {
             return;
         }
 
@@ -54,7 +55,7 @@ final readonly class PrecognitionValidationListener
 
         $this->normaliseValidationFailedStatus($event, $exception);
 
-        $requestedFields = PrecognitionRequest::validateOnly($request);
+        $requestedFields = $this->precognitionContext->validateOnly($request);
         if ([] === $requestedFields) {
             return;
         }

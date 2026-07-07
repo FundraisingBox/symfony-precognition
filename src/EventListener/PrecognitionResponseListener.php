@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace FundraisingBox\Precognition\EventListener;
 
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
-use FundraisingBox\Precognition\Http\PrecognitionRequest;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 
@@ -17,13 +17,18 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
  */
 final readonly class PrecognitionResponseListener
 {
+    public function __construct(
+        private PrecognitionContext $precognitionContext,
+    ) {
+    }
+
     public function onKernelResponse(ResponseEvent $event): void
     {
         if (!$event->isMainRequest()) {
             return;
         }
 
-        if (!PrecognitionRequest::isPrecognitive($event->getRequest())) {
+        if (!$this->precognitionContext->isPrecognitive($event->getRequest())) {
             return;
         }
 
