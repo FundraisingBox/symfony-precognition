@@ -104,13 +104,15 @@ final class PrecognitionFormTest extends WebTestCase
         $this->assertSame(0, $this->trackerCount());
     }
 
-    public function testUnannotatedFormControllerStillShortCircuitsWithoutValidation(): void
+    public function testUnannotatedFormControllerIgnoresPrecognitionHeader(): void
     {
         $client = self::createClient();
 
         $client->request('POST', '/task/unannotated', $this->invalidTaskPayload(), [], $this->precognitive());
 
-        $this->assertPrecognitionSuccessResponse($client->getResponse());
+        $this->assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $this->assertFalse($client->getResponse()->headers->has(PrecognitionHeaders::PRECOGNITION));
+        $this->assertFalse($client->getResponse()->headers->has(PrecognitionHeaders::SUCCESS));
         $this->assertSame(0, $this->trackerCount());
     }
 

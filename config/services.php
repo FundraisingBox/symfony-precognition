@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use FundraisingBox\Precognition\EventListener\PrecognitionActivationListener;
 use FundraisingBox\Precognition\EventListener\PrecognitionFormValidationListener;
 use FundraisingBox\Precognition\EventListener\PrecognitionResponseListener;
 use FundraisingBox\Precognition\EventListener\PrecognitionShortCircuitListener;
@@ -21,6 +22,13 @@ return static function (ContainerConfigurator $configurator): void {
 
     $services->set(PrecognitionContext::class)
         ->args([service(RequestStack::class)]);
+
+    $services->set(PrecognitionActivationListener::class)
+        ->args([service(PrecognitionContext::class), '%precognition.allow_all_routes%'])
+        ->tag('kernel.event_listener', [
+            'event'  => KernelEvents::CONTROLLER,
+            'method' => 'onKernelController',
+        ]);
 
     $services->set(ViolationPathFilter::class);
 

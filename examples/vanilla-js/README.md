@@ -12,7 +12,7 @@ The form maps to the same payload as the bundle's functional-test DTO:
 
 1. Point a Symfony application that enables `PrecognitionBundle` at a
    `POST /user` endpoint whose action validates its payload (for example via
-   `#[MapRequestPayload]`). Set `ENDPOINT` in
+   `#[MapRequestPayload]`) and opts in with `#[Precognitive]`. Set `ENDPOINT` in
    [`precognition.js`](precognition.js) to its URL.
 2. Serve this folder — for example `php -S localhost:5173` — and open
    `index.html`.
