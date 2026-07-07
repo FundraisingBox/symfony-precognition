@@ -3,7 +3,7 @@
 A Symfony bundle that validates a request without executing the controller
 body. A _precognitive_ request runs the normal argument-resolution validation
 (`#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver) or an
-opt-in Symfony Form via `#[PrecognitiveForm]`, then short-circuits before the
+explicit Symfony Form via `#[PrecognitiveForm]`, then short-circuits before the
 controller runs, so a client can validate input — for example live form
 validation — without creating or mutating anything.
 
@@ -13,11 +13,11 @@ validation — without creating or mutating anything.
   `Vary: Precognition`
 - optional `Precognition-Validate-Only: a,b` limits which fields are reported
 
-The behaviour is **global and header-driven** for validation that already runs
-during argument resolution: any such endpoint can be used precognitively by
-sending `Precognition: true`. Symfony Forms are different because their
-validation normally runs inside the controller body; form endpoints opt in with
-`#[PrecognitiveForm]`.
+Routes are **opt-in by default**. Add `#[Precognitive]` to a controller method
+or class to allow `Precognition: true` requests on routes whose validation runs
+during argument resolution. `#[PrecognitiveForm]` is also an opt-in by itself.
+Set `precognition.allow_all_routes: true` only if you want the previous global
+mode where every route may answer precognitively.
 
 ## How it works
 
@@ -31,6 +31,12 @@ success the short-circuit listener replaces the controller with a no-op `204`.
 ```
                           Precognition: true request
                                     │
+                                    ▼
+ kernel.controller       PrecognitionActivationListener
+                         allows #[Precognitive], #[PrecognitiveForm],
+                         or allow_all_routes
+                                    │
+                                    ▼
               custom resolvers validate here (before event)
                                     ▼
  kernel.controller_arguments  ┌────────────────────────────────────────┐
@@ -67,6 +73,14 @@ standard `ConstraintViolationListInterface` in place, so the downstream `422`
 renderer automatically sees the filtered list.
 
 > [!WARNING]
+> **Only opted-in precognition requests short-circuit.** Sending
+> `Precognition: true` to a route without `#[Precognitive]` or
+> `#[PrecognitiveForm]` behaves as if the bundle were absent: the controller
+> runs normally, no `Precognition-*` response headers are added, and validation
+> failures keep the application's default handling. Clients should check for
+> the `Precognition: true` **response** header before assuming the request was
+> honoured.
+>
 > **Only argument-resolution validation runs.** The bundle reuses the
 > validation performed while resolving controller arguments —
 > `#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver that
@@ -88,16 +102,16 @@ so the same ideas and much of the same frontend behaviour apply.
 ### Differences from Laravel Precognition
 
 - **Opt-in.** Laravel opts in per route via the `HandlePrecognitiveRequests`
-  middleware. This bundle is global and purely header-driven: any endpoint whose
-  validation runs during argument resolution can be used precognitively.
+  middleware. This bundle matches that model with `#[Precognitive]`; setting
+  `allow_all_routes: true` is the Symfony-specific escape hatch for global mode.
 - **Rule vs. violation filtering.** Laravel filters the _rules_ before
   validating, so `Validate-Only` means only those rules execute. This bundle
   validates everything and filters the resulting _violations_ (post-validation
   filtering), so expensive constraints on non-requested fields still run.
-- **No per-request hook.** Laravel exposes `$request->isPrecognitive()` for
-  conditional logic in form requests. The equivalent here is
-  `PrecognitionRequest::isPrecognitive()`, but there is no per-endpoint hook or
-  side-effect API — the bundle is transparent.
+- **Request API shape.** Laravel exposes `$request->isPrecognitive()` for
+  conditional logic in form requests. Symfony requests cannot safely grow bundle
+  methods, so inject `PrecognitionContext` and call
+  `$precognition->isPrecognitive()` instead.
 - **Error body shape.** The `422` body is whatever your application's renderer
   produces (Symfony `problem+json` by default), not Laravel's
   `{errors: {field: [...]}}` shape.
@@ -126,11 +140,21 @@ return [
 ];
 ```
 
-There is nothing to configure for argument-resolution validation. The only
-requirement is that the validation exception raised during argument resolution
-is (or wraps, as previous) Symfony's standard `ValidationFailedException` —
-which is the case for `#[MapRequestPayload]` and for any custom resolver that
-throws it.
+## Configuration
+
+By default, routes must opt in with `#[Precognitive]` or `#[PrecognitiveForm]`.
+To allow the header on every route, enable global mode:
+
+```yaml
+# config/packages/precognition.yaml
+precognition:
+    allow_all_routes: false # default
+```
+
+The only requirement for argument-resolution validation is that the validation
+exception raised during argument resolution is (or wraps, as previous)
+Symfony's standard `ValidationFailedException` — which is the case for
+`#[MapRequestPayload]` and for any custom resolver that throws it.
 
 Install `symfony/form` as well if you want to validate Symfony Forms
 precognitively:
@@ -147,6 +171,7 @@ Given a DTO and controller that map and validate a payload:
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Constraints as Assert;
+use FundraisingBox\Precognition\Attribute\Precognitive;
 
 final class UserDto
 {
@@ -164,6 +189,7 @@ final class UserDto
 final class UserController
 {
     #[Route('/user', methods: ['POST'])]
+    #[Precognitive]
     public function create(#[MapRequestPayload] UserDto $userDto): Response
     {
         // never runs for a precognitive request
@@ -206,9 +232,11 @@ curl -i -X POST https://example.test/user \
 The same protocol applies to query-string validation:
 
 ```php
+use FundraisingBox\Precognition\Attribute\Precognitive;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 
 #[Route('/dashboard', methods: ['GET'])]
+#[Precognitive]
 public function dashboard(#[MapQueryString] UserDto $userDto): Response
 {
     // never runs for a precognitive request
@@ -230,11 +258,13 @@ file validation. Non-precognitive requests keep Symfony's configured status.
 Uploaded files work through `#[MapUploadedFile]` as well:
 
 ```php
+use FundraisingBox\Precognition\Attribute\Precognitive;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[Route('/user/picture', methods: ['PUT'])]
+#[Precognitive]
 public function changePicture(
     #[MapUploadedFile([
         new Assert\File(mimeTypes: ['image/png', 'image/jpeg']),
@@ -249,6 +279,18 @@ If a file endpoint should be usable precognitively without re-uploading the
 file, make the argument nullable, for example `?UploadedFile $picture = null`.
 A missing non-nullable file is rejected by Symfony with `422` before it creates a
 validation violation list, so `Precognition-Validate-Only` has nothing to filter.
+
+You can also opt in a whole controller class:
+
+```php
+use FundraisingBox\Precognition\Attribute\Precognitive;
+
+#[Precognitive]
+final class UserController
+{
+    // All routes on this controller allow precognitive requests.
+}
+```
 
 ### Symfony Forms
 
@@ -280,6 +322,37 @@ submits still run your controller and keep the form's real CSRF behavior.
 Form violation paths use field names without the root form prefix. For a form
 named `task`, an invalid `task[task]` input is reported as `task`, and
 `Precognition-Validate-Only: task` matches it.
+
+`#[PrecognitiveForm]` implies precognitive opt-in. You do not need to add an
+extra `#[Precognitive]` attribute to the same route.
+
+### Detecting precognitive requests
+
+Inject `PrecognitionContext` anywhere you need Laravel-like
+`$request->isPrecognitive()` behavior:
+
+```php
+use FundraisingBox\Precognition\Http\PrecognitionContext;
+
+final readonly class SomeService
+{
+    public function __construct(
+        private PrecognitionContext $precognition,
+    ) {
+    }
+
+    public function __invoke(): void
+    {
+        if ($this->precognition->isPrecognitive()) {
+            // The client sent Precognition: true.
+        }
+
+        if ($this->precognition->isActive()) {
+            // The current route opted in and precognition is being honoured.
+        }
+    }
+}
+```
 
 ### `Precognition-Validate-Only`
 
@@ -314,8 +387,11 @@ validations, and renders the returned violations.
 
 | Class                                                                       | Responsibility                                               |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [`Attribute/Precognitive`](src/Attribute/Precognitive.php)                  | Method/class opt-in for argument-resolution validation       |
+| [`Attribute/PrecognitiveForm`](src/Attribute/PrecognitiveForm.php)          | Method/class opt-in for Symfony Form validation              |
 | [`Http/PrecognitionHeaders`](src/Http/PrecognitionHeaders.php)              | Header-name and value constants                              |
-| [`Http/PrecognitionRequest`](src/Http/PrecognitionRequest.php)              | `isPrecognitive()`, `validateOnly()`                         |
+| [`Http/PrecognitionContext`](src/Http/PrecognitionContext.php)              | `isPrecognitive()`, active-route state, validate-only parsing |
+| [`EventListener/PrecognitionActivationListener`](src/EventListener/PrecognitionActivationListener.php) | `kernel.controller` → route opt-in activation |
 | [`EventListener/PrecognitionShortCircuitListener`](src/EventListener/PrecognitionShortCircuitListener.php) | `kernel.controller_arguments` → no-op `204` |
 | [`EventListener/PrecognitionFormValidationListener`](src/EventListener/PrecognitionFormValidationListener.php) | `kernel.controller_arguments` → opt-in Symfony Form validation |
 | [`EventListener/PrecognitionResponseListener`](src/EventListener/PrecognitionResponseListener.php) | `kernel.response` → protocol headers                |

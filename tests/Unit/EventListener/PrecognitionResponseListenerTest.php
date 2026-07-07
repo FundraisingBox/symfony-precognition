@@ -70,15 +70,21 @@ final class PrecognitionResponseListenerTest extends TestCase
     private function dispatch(Request $request, Response $response, int $requestType): void
     {
         $event = new ResponseEvent($this->createKernelStub(), $request, $requestType, $response);
-        (new PrecognitionResponseListener(new PrecognitionContext(new RequestStack())))->onKernelResponse($event);
+        (new PrecognitionResponseListener($this->context()))->onKernelResponse($event);
     }
 
     private function precognitiveRequest(): Request
     {
         $request = new Request();
         $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
+        $this->context()->activate($request);
 
         return $request;
+    }
+
+    private function context(): PrecognitionContext
+    {
+        return new PrecognitionContext(new RequestStack());
     }
 
     private function createKernelStub(): HttpKernelInterface
