@@ -84,7 +84,7 @@ final readonly class PrecognitionValidationListener
             return;
         }
 
-        $event->setThrowable(HttpException::fromStatusCode(
+        $event->setThrowable(new HttpException(
             Response::HTTP_UNPROCESSABLE_ENTITY,
             $throwable->getMessage(),
             $exception
