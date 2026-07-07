@@ -6,7 +6,7 @@ namespace FundraisingBox\Precognition\EventListener;
 
 use FundraisingBox\Precognition\Attribute\PrecognitiveForm;
 use FundraisingBox\Precognition\Form\FormErrorViolationMapper;
-use FundraisingBox\Precognition\Http\PrecognitionRequest;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
@@ -18,6 +18,7 @@ final readonly class PrecognitionFormValidationListener
     public function __construct(
         private FormFactoryInterface $formFactory,
         private FormErrorViolationMapper $formErrorViolationMapper,
+        private PrecognitionContext $precognitionContext,
     ) {
     }
 
@@ -28,7 +29,7 @@ final readonly class PrecognitionFormValidationListener
         }
 
         $request = $event->getRequest();
-        if (!PrecognitionRequest::isPrecognitive($request)) {
+        if (!$this->precognitionContext->isPrecognitive($request)) {
             return;
         }
 
