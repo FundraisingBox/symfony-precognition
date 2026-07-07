@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace FundraisingBox\Precognition\Tests\Unit\EventListener;
 
 use FundraisingBox\Precognition\EventListener\PrecognitionResponseListener;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -68,7 +70,7 @@ final class PrecognitionResponseListenerTest extends TestCase
     private function dispatch(Request $request, Response $response, int $requestType): void
     {
         $event = new ResponseEvent($this->createKernelStub(), $request, $requestType, $response);
-        (new PrecognitionResponseListener())->onKernelResponse($event);
+        (new PrecognitionResponseListener(new PrecognitionContext(new RequestStack())))->onKernelResponse($event);
     }
 
     private function precognitiveRequest(): Request

@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace FundraisingBox\Precognition\Tests\Unit\EventListener;
 
 use FundraisingBox\Precognition\EventListener\PrecognitionShortCircuitListener;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -22,7 +24,7 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
         $originalController = static fn (): Response => throw new RuntimeException('Original controller must not run');
         $event = $this->createEvent($originalController, $this->precognitiveRequest(), HttpKernelInterface::MAIN_REQUEST);
 
-        (new PrecognitionShortCircuitListener())->onKernelControllerArguments($event);
+        $this->listener()->onKernelControllerArguments($event);
 
         $controller = $event->getController();
         $response = $controller('arg1', 'arg2');
@@ -36,7 +38,7 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
         $originalController = static fn (): Response => new Response('original');
         $event = $this->createEvent($originalController, new Request(), HttpKernelInterface::MAIN_REQUEST);
 
-        (new PrecognitionShortCircuitListener())->onKernelControllerArguments($event);
+        $this->listener()->onKernelControllerArguments($event);
 
         $this->assertSame($originalController, $event->getController());
     }
@@ -46,7 +48,7 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
         $originalController = static fn (): Response => new Response('original');
         $event = $this->createEvent($originalController, $this->precognitiveRequest(), HttpKernelInterface::SUB_REQUEST);
 
-        (new PrecognitionShortCircuitListener())->onKernelControllerArguments($event);
+        $this->listener()->onKernelControllerArguments($event);
 
         $this->assertSame($originalController, $event->getController());
     }
@@ -57,6 +59,11 @@ final class PrecognitionShortCircuitListenerTest extends TestCase
         $request->headers->set(PrecognitionHeaders::PRECOGNITION, PrecognitionHeaders::TRUE_VALUE);
 
         return $request;
+    }
+
+    private function listener(): PrecognitionShortCircuitListener
+    {
+        return new PrecognitionShortCircuitListener(new PrecognitionContext(new RequestStack()));
     }
 
     private function createEvent(callable $controller, Request $request, int $requestType): ControllerArgumentsEvent
