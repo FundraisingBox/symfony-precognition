@@ -6,40 +6,33 @@
     <title>Symfony Precognition — vanilla JS example</title>
     <style>
       body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
-      .field { margin-bottom: 1rem; display: flex; flex-direction: column; }
-      label { font-weight: 600; margin-bottom: 0.25rem; }
-      input { padding: 0.5rem; font-size: 1rem; }
-      .error { color: #b00020; font-size: 0.85rem; min-height: 1rem; margin-top: 0.25rem; }
-      button { padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
-      .ok { color: #04724d; }
+      label { display: block; font-weight: 600; margin-top: 1rem; }
+      input { padding: 0.5rem; font-size: 1rem; width: 100%; box-sizing: border-box; }
+      .error { display: block; color: #b00020; font-size: 0.85rem; min-height: 1rem; }
+      button { margin-top: 1rem; padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
+      #status { color: #04724d; }
     </style>
   </head>
   <body>
     <h1>Create user</h1>
 
-    <!-- Each input carries the DTO property path it maps to; the error slot is
-         keyed by the same path so violations can be rendered next to it. -->
+    <!-- Input names match UserDto's property paths (firstName, lastName, age);
+         each error slot is keyed by the same path. -->
     <form id="user">
-      <div class="field">
-        <label for="firstName">First name</label>
-        <input id="firstName" name="firstName" data-field="firstName" />
-        <span class="error" data-error-for="firstName"></span>
-      </div>
+      <label for="firstName">First name</label>
+      <input id="firstName" name="firstName" />
+      <span class="error" data-error-for="firstName"></span>
 
-      <div class="field">
-        <label for="lastName">Last name</label>
-        <input id="lastName" name="lastName" data-field="lastName" />
-        <span class="error" data-error-for="lastName"></span>
-      </div>
+      <label for="lastName">Last name</label>
+      <input id="lastName" name="lastName" />
+      <span class="error" data-error-for="lastName"></span>
 
-      <div class="field">
-        <label for="age">Age</label>
-        <input id="age" name="age" data-field="age" inputmode="numeric" />
-        <span class="error" data-error-for="age"></span>
-      </div>
+      <label for="age">Age</label>
+      <input id="age" name="age" type="number" />
+      <span class="error" data-error-for="age"></span>
 
       <button type="submit">Create user</button>
-      <p class="ok" id="status"></p>
+      <p id="status"></p>
     </form>
 
     <script type="module" src="./precognition.js"></script>
