@@ -12,6 +12,7 @@ namespace FundraisingBox\Precognition\Tests\Functional;
 use FundraisingBox\Precognition\Tests\Functional\Fixture\AllowAllRoutesTestKernel;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\HttpFoundation\Response;
 
 #[CoversNothing]
 final class PrecognitionAllowAllRoutesTest extends WebTestCase
@@ -30,6 +31,17 @@ final class PrecognitionAllowAllRoutesTest extends WebTestCase
         $client->request('POST', '/task/unannotated', $this->invalidTaskPayload(), [], $this->precognitive());
 
         $this->assertPrecognitionSuccessResponse($client->getResponse());
+        $this->assertSame(0, $this->trackerCount());
+    }
+
+    public function testGlobalModeReturns422ForInvalidAnnotatedRoutes(): void
+    {
+        $client = self::createClient();
+
+        $client->request('POST', '/task/new', $this->invalidTaskPayload(), [], $this->precognitive());
+
+        $this->assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $this->assertSame(['task'], $this->violationPropertyPaths($client->getResponse()));
         $this->assertSame(0, $this->trackerCount());
     }
 
