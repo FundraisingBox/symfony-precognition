@@ -4,6 +4,13 @@ parameters:
         - src/
         - tests/
     ignoreErrors:
+        # Symfony 6.4 resolves rootNode() to the broad NodeDefinition type, even
+        # though an AbstractBundle configuration always has an array root node.
+        # Newer Symfony versions infer the fluent builder types correctly.
+        -
+            message: '#^(?:Call to an undefined method Symfony\\Component\\Config\\Definition\\Builder\\NodeDefinition::children\(\)|Cannot call method (?:booleanNode|defaultFalse|end|info)\(\) on mixed)\.$#'
+            path: src/PrecognitionBundle.php
+            reportUnmatched: false
         # MapUploadedFile was added in Symfony 7.1, so it does not exist on the
         # oldest supported version (6.4). reportUnmatched keeps this from failing
         # on newer Symfony versions where the attribute is available.
