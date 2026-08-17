@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @author Clemens Krack <info@clemenskrack.com>
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
+
 declare(strict_types=1);
 
 namespace FundraisingBox\Precognition\Tests\Unit\Form;

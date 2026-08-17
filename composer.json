@@ -1,8 +1,19 @@
 {
     "name": "fundraisingbox/symfony-precognition",
-    "description": "A symfony bundle that allows validating requests without executing controller code",
+    "description": "A Symfony bundle that allows validating requests without executing controller code",
     "license": "MIT",
     "type": "symfony-bundle",
+    "keywords": [
+      "symfony", "bundle", "precognition", "validation"
+    ],
+    "authors": [
+      {
+        "name": "Clemens Krack",
+        "email": "info@clemenskrack.com",
+        "homepage": "https://clemenskrack.com",
+        "role": "Developer"
+      }
+    ],
     "require": {
         "php": ">=8.3",
         "symfony/config": "^6.4 || ^7.0 || ^8.0",
