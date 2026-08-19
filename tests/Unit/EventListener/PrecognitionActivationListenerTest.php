@@ -14,7 +14,7 @@ use FundraisingBox\Precognition\Attribute\PrecognitiveForm;
 use FundraisingBox\Precognition\EventListener\PrecognitionActivationListener;
 use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
-use FundraisingBox\Precognition\Tests\Functional\Fixture\TaskType;
+use FundraisingBox\Precognition\Tests\Fixtures\TaskType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

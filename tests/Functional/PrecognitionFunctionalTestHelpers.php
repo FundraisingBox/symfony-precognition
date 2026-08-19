@@ -10,8 +10,8 @@ declare(strict_types=1);
 namespace FundraisingBox\Precognition\Tests\Functional;
 
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
-use FundraisingBox\Precognition\Tests\Functional\Fixture\ControllerInvocationTracker;
-use FundraisingBox\Precognition\Tests\Functional\Fixture\TestKernel;
+use FundraisingBox\Precognition\Tests\Fixtures\ControllerInvocationTracker;
+use FundraisingBox\Precognition\Tests\Fixtures\TestKernel;
 use Symfony\Component\HttpFoundation\Response;
 
 use function json_decode;

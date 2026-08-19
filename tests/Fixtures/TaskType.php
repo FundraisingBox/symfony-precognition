@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FundraisingBox\Precognition\Tests\Functional\Fixture;
+namespace FundraisingBox\Precognition\Tests\Fixtures;
 
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FundraisingBox\Precognition\Tests\Functional\Fixture;
+namespace FundraisingBox\Precognition\Tests\Fixtures;
 
 /**
  * Records how often a controller body actually ran, so tests can assert that a

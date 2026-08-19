@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace FundraisingBox\Precognition\Tests\Functional;
 
-use FundraisingBox\Precognition\Tests\Functional\Fixture\AllowAllRoutesTestKernel;
+use FundraisingBox\Precognition\Tests\Fixtures\AllowAllRoutesTestKernel;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;

@@ -16,5 +16,5 @@ parameters:
         # on newer Symfony versions where the attribute is available.
         -
             message: '#Attribute class Symfony\\Component\\HttpKernel\\Attribute\\MapUploadedFile does not exist\.#'
-            path: tests/Functional/Fixture/UserController.php
+            path: tests/Fixtures/UserController.php
             reportUnmatched: false

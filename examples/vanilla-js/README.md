@@ -7,10 +7,10 @@ precognitive check before the real POST.
 
 The form targets the bundle's functional-test fixtures:
 
-- [`UserController::create()`](../../tests/Functional/Fixture/UserController.php) —
+- [`UserController::create()`](../../tests/Fixtures/UserController.php) —
   `POST /user`, opted in with `#[Precognitive]` and mapped via
   `#[MapRequestPayload]`.
-- [`UserDto`](../../tests/Functional/Fixture/UserDto.php) — `firstName` and
+- [`UserDto`](../../tests/Fixtures/UserDto.php) — `firstName` and
   `lastName` (`NotBlank`), `age` (`int`, `GreaterThan(18)`).
 
 Because `UserDto::$age` is typed `int`, the client coerces the input value to a

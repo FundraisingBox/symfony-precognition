@@ -2,9 +2,9 @@
 //
 // The backend is the bundle's functional-test fixture:
 //   - UserController::create() — POST /user, #[Precognitive] + #[MapRequestPayload]
-//     (tests/Functional/Fixture/UserController.php)
+//     (tests/Fixtures/UserController.php)
 //   - UserDto — firstName/lastName (NotBlank), age (int, GreaterThan(18))
-//     (tests/Functional/Fixture/UserDto.php)
+//     (tests/Fixtures/UserDto.php)
 //
 // Each field is validated as the user leaves it: a precognitive POST
 // (Precognition: true) runs server-side validation but the controller never
