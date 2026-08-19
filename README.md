@@ -388,22 +388,6 @@ A dependency-free example is in [`examples/vanilla-js`](examples/vanilla-js): a
 small form that validates each field on blur, cancels superseded in-flight
 validations, and renders the returned violations.
 
-## Components
-
-| Class                                                                       | Responsibility                                               |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [`Attribute/Precognitive`](src/Attribute/Precognitive.php)                  | Method/class opt-in for argument-resolution validation       |
-| [`Attribute/PrecognitiveForm`](src/Attribute/PrecognitiveForm.php)          | Method/class opt-in for Symfony Form validation              |
-| [`Http/PrecognitionHeaders`](src/Http/PrecognitionHeaders.php)              | Header-name and value constants                              |
-| [`Http/PrecognitionContext`](src/Http/PrecognitionContext.php)              | `isPrecognitive()`, active-route state, validate-only parsing |
-| [`EventListener/PrecognitionActivationListener`](src/EventListener/PrecognitionActivationListener.php) | `kernel.controller` → route opt-in activation |
-| [`EventListener/PrecognitionShortCircuitListener`](src/EventListener/PrecognitionShortCircuitListener.php) | `kernel.controller_arguments` → no-op `204` |
-| [`EventListener/PrecognitionFormValidationListener`](src/EventListener/PrecognitionFormValidationListener.php) | `kernel.controller_arguments` → opt-in Symfony Form validation |
-| [`EventListener/PrecognitionResponseListener`](src/EventListener/PrecognitionResponseListener.php) | `kernel.response` → protocol headers                |
-| [`EventListener/PrecognitionValidationListener`](src/EventListener/PrecognitionValidationListener.php) | `kernel.exception` → `Precognition-Validate-Only` filtering |
-| [`Form/FormErrorViolationMapper`](src/Form/FormErrorViolationMapper.php)  | Symfony Form errors → constraint violations          |
-| [`Validation/ViolationPathFilter`](src/Validation/ViolationPathFilter.php)  | Field-path matching                                          |
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
