@@ -1,4 +1,18 @@
-# Symfony Precognition
+<h1>
+  Symfony Precognition
+  <a href="https://github.com/FundraisingBox">
+    <img
+      src="https://github.com/FundraisingBox.png?size=128"
+      alt="FundraisingBox"
+      width="72"
+      align="right"
+    >
+  </a>
+</h1>
+
+[![CI][ci-badge]][ci-workflow]
+[![Latest release][release-badge]][latest-release]
+[![License][license-badge]][license]
 
 A Symfony bundle that validates a request without executing the controller
 body. A _precognitive_ request runs the normal argument-resolution validation
@@ -144,3 +158,10 @@ native status codes and response body.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+[ci-badge]: https://github.com/FundraisingBox/symfony-precognition/actions/workflows/ci.yml/badge.svg
+[ci-workflow]: https://github.com/FundraisingBox/symfony-precognition/actions/workflows/ci.yml
+[release-badge]: https://img.shields.io/github/v/release/FundraisingBox/symfony-precognition
+[latest-release]: https://github.com/FundraisingBox/symfony-precognition/releases/latest
+[license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license]: LICENSE
