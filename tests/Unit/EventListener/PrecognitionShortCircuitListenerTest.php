@@ -13,6 +13,7 @@ use FundraisingBox\Precognition\EventListener\PrecognitionShortCircuitListener;
 use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,6 +23,7 @@ use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 #[CoversClass(PrecognitionShortCircuitListener::class)]
+#[UsesClass(PrecognitionContext::class)]
 final class PrecognitionShortCircuitListenerTest extends TestCase
 {
     public function testReplacesControllerWithNoContentForPrecognitiveRequest(): void

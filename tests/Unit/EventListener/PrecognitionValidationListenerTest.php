@@ -15,6 +15,7 @@ use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
 use FundraisingBox\Precognition\Validation\ViolationPathFilter;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,6 +31,8 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
 #[CoversClass(PrecognitionValidationListener::class)]
+#[UsesClass(PrecognitionContext::class)]
+#[UsesClass(ViolationPathFilter::class)]
 final class PrecognitionValidationListenerTest extends TestCase
 {
     public function testReturns204AndStopsPropagationWhenRequestedFieldsAreValid(): void

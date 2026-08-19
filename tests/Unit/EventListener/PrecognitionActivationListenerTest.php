@@ -16,6 +16,7 @@ use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Http\PrecognitionHeaders;
 use FundraisingBox\Precognition\Tests\Functional\Fixture\TaskType;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +26,8 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 #[CoversClass(PrecognitionActivationListener::class)]
+#[UsesClass(PrecognitiveForm::class)]
+#[UsesClass(PrecognitionContext::class)]
 final class PrecognitionActivationListenerTest extends TestCase
 {
     public function testIgnoresRequestWithoutPrecognitionHeader(): void
