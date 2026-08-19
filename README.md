@@ -30,36 +30,36 @@ failure it throws — custom resolvers throw from argument resolution;
 `kernel.exception`, producing the application's normal error response. On
 success the short-circuit listener replaces the controller with a no-op `204`.
 
-```
-                          Precognition: true request
-                                    │
-                                    ▼
- kernel.controller       PrecognitionActivationListener
-                         allows #[Precognitive], #[PrecognitiveForm],
-                         or allow_all_routes
-                                    │
-                                    ▼
-              custom resolvers validate here (before event)
-                                    ▼
- kernel.controller_arguments  ┌────────────────────────────────────────┐
-   MapRequestPayload validation │ runs here (this event, priority 0)     │
-   PrecognitiveForm validation  │ runs after it (priority -32, opt-in)   │
-   PrecognitionShortCircuit      │ runs after both (priority -64)         │
-                                └───────────────────┬────────────────────┘
-                          valid │                            │ invalid
-                                ▼                            ▼
-                  setController(no-op 204)        ValidationFailed / HttpException
-                                │                            │
-                                ▼                            ▼
-                        controller skipped             kernel.exception
-                                │            PrecognitionValidationListener (prio 20)
-                                │            then the app's validation renderer
-                                └──────────────┬─────────────┘
-                                               ▼
-                                          kernel.response
-                       PrecognitionResponseListener adds headers:
-                       Precognition: true, Vary: Precognition,
-                       Precognition-Success: true (on 204 only)
+```mermaid
+flowchart TD
+    request["Precognition: true request"] --> activation
+
+    subgraph controller["kernel.controller"]
+        activation["PrecognitionActivationListener<br/>allows #91;Precognitive#93;, #91;PrecognitiveForm#93;,<br/>or allow_all_routes"]
+    end
+
+    activation --> custom["Custom resolvers validate<br/>(before the event)"]
+
+    subgraph arguments["kernel.controller_arguments"]
+        payload["MapRequestPayload validation<br/>priority 0"]
+        form["PrecognitiveForm validation<br/>priority -32, opt-in"]
+        shortCircuit["PrecognitionShortCircuit<br/>priority -64"]
+        payload --> form --> shortCircuit
+    end
+
+    custom --> payload
+    custom -- invalid --> exception["ValidationFailed / HttpException"]
+    payload -- invalid --> exception
+    form -- invalid --> exception
+    shortCircuit -- valid --> noop["setController(no-op 204)<br/>controller skipped"]
+
+    exception --> kernelException["kernel.exception"]
+    kernelException --> validation["PrecognitionValidationListener<br/>priority 20"]
+    validation --> renderer["Application validation renderer"]
+
+    noop --> response["kernel.response"]
+    renderer --> response
+    response --> headers["PrecognitionResponseListener adds headers:<br/>Precognition: true, Vary: Precognition,<br/>Precognition-Success: true (on 204 only)"]
 ```
 
 The `Precognition-Validate-Only` filtering happens at the exception stage:
