@@ -2,132 +2,26 @@
 
 A Symfony bundle that validates a request without executing the controller
 body. A _precognitive_ request runs the normal argument-resolution validation
-(`#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver) or an
-explicit Symfony Form via `#[PrecognitiveForm]`, then short-circuits before the
-controller runs, so a client can validate input — for example live form
-validation — without creating or mutating anything.
+or an explicitly annotated Symfony Form, then short-circuits before the
+controller runs. This lets a client validate input — for example during live
+form validation — without creating or mutating anything.
 
 - validation passes → `204 No Content` + `Precognition-Success: true`
 - validation fails → the application's normal validation error response
-  (`422` for `#[MapRequestPayload]`; `404` for Symfony's default
-  `#[MapQueryString]`)
-- every precognitive response also carries `Precognition: true` and
+- every precognitive response carries `Precognition: true` and
   `Vary: Precognition`
 - optional `Precognition-Validate-Only: a,b` limits which fields are reported
 
 Routes are **opt-in by default**. Add `#[Precognitive]` to a controller method
-or class to allow `Precognition: true` requests on routes whose validation runs
-during argument resolution. `#[PrecognitiveForm]` is also an opt-in by itself.
-Set `precognition.allow_all_routes: true` only if you want the previous global
-mode where every route may answer precognitively.
+or class that uses `#[MapRequestPayload]`, `#[MapQueryString]`,
+`#[MapUploadedFile]`, or a custom value resolver. Symfony Forms opt in with
+`#[PrecognitiveForm]`.
 
-## How it works
-
-Validation runs during argument resolution, before the controller body. On
-failure it throws — custom resolvers throw from argument resolution;
-`RequestPayloadValueResolver` (`#[MapRequestPayload]`) throws from its
-`kernel.controller_arguments` subscriber — and the exception flows to
-`kernel.exception`, producing the application's normal error response. On
-success the short-circuit listener replaces the controller with a no-op `204`.
-
-```mermaid
-flowchart TD
-    request["Precognition: true request"] --> activation
-
-    subgraph controller["kernel.controller"]
-        activation["PrecognitionActivationListener<br/>allows #91;Precognitive#93;, #91;PrecognitiveForm#93;,<br/>or allow_all_routes"]
-    end
-
-    activation --> custom["Custom resolvers validate<br/>(before the event)"]
-
-    subgraph arguments["kernel.controller_arguments"]
-        payload["MapRequestPayload validation<br/>priority 0"]
-        form["PrecognitiveForm validation<br/>priority -32, opt-in"]
-        shortCircuit["PrecognitionShortCircuit<br/>priority -64"]
-        payload --> form --> shortCircuit
-    end
-
-    custom --> payload
-    custom -- invalid --> exception["ValidationFailed / HttpException"]
-    payload -- invalid --> exception
-    form -- invalid --> exception
-    shortCircuit -- valid --> noop["setController(no-op 204)<br/>controller skipped"]
-
-    exception --> kernelException["kernel.exception"]
-    kernelException --> validation["PrecognitionValidationListener<br/>priority 20"]
-    validation --> renderer["Application validation renderer"]
-
-    noop --> response["kernel.response"]
-    renderer --> response
-    response --> headers["PrecognitionResponseListener adds headers:<br/>Precognition: true, Vary: Precognition,<br/>Precognition-Success: true (on 204 only)"]
-```
-
-The `Precognition-Validate-Only` filtering happens at the exception stage:
-Symfony's validator dispatches no events, so there is no validation-time hook to
-filter violations. The listener keys off Symfony's standard
-`ValidationFailedException` — found either as the thrown exception (custom
-resolvers) or in the `getPrevious()` chain (`#[MapRequestPayload]`,
-`#[MapQueryString]` and `#[MapUploadedFile]` wrap it in an `HttpException`). For
-precognitive requests, the wrapped exception's original status is kept. That
-means Symfony's `#[MapQueryString]` default `404` remains `404`, while
-`#[MapRequestPayload]` validation failures normally remain `422`. The listener
-then filters the standard `ConstraintViolationListInterface` in place, so the
-downstream validation renderer automatically sees the filtered list.
-
-> [!WARNING]
-> **Only opted-in precognition requests short-circuit.** Sending
-> `Precognition: true` to a route without `#[Precognitive]` or
-> `#[PrecognitiveForm]` behaves as if the bundle were absent: the controller
-> runs normally, no `Precognition-*` response headers are added, and validation
-> failures keep the application's default handling. Clients should check for
-> the `Precognition: true` **response** header before assuming the request was
-> honoured.
->
-> **Only argument-resolution validation runs.** The bundle reuses the
-> validation performed while resolving controller arguments —
-> `#[MapRequestPayload]`, `#[MapQueryString]`, or a custom value resolver that
-> throws `ValidationFailedException` — plus explicitly annotated Symfony Forms.
-> Other validation or business rules executed **inside the controller body** (or
-> in a handler behind it) never run for a precognitive request. A `204`
-> therefore means "the payload is structurally valid", not "this operation
-> would succeed".
-
-## Prior art
-
-This bundle ports the request/response protocol of
-[Laravel Precognition](https://github.com/laravel/precognition), also described
-for Rails by [Inertia Precognition](https://inertia-rails.dev/guide/precognition).
-The wire protocol — the `Precognition`, `Precognition-Success` and
-`Precognition-Validate-Only` headers and the success response — matches, so the
-same ideas and much of the same frontend behaviour apply. Validation error
-status codes remain Symfony's native statuses for the resolver in use.
-
-### Differences from Laravel Precognition
-
-- **Opt-in.** Laravel opts in per route via the `HandlePrecognitiveRequests`
-  middleware. This bundle matches that model with `#[Precognitive]`; setting
-  `allow_all_routes: true` is the Symfony-specific escape hatch for global mode.
-- **Rule vs. violation filtering.** Laravel filters the _rules_ before
-  validating, so `Validate-Only` means only those rules execute. This bundle
-  validates everything and filters the resulting _violations_ (post-validation
-  filtering), so expensive constraints on non-requested fields still run.
-- **Request API shape.** Laravel exposes `$request->isPrecognitive()` for
-  conditional logic in form requests. Symfony requests cannot safely grow bundle
-  methods, so inject `PrecognitionContext` and call
-  `$precognition->isPrecognitive()` instead.
-- **Error status and body shape.** Validation failures keep Symfony's native
-  status for the resolver in use (`422` for `#[MapRequestPayload]`, `404` for
-  default `#[MapQueryString]`). The body is whatever your application's
-  renderer produces (Symfony `problem+json` by default), not Laravel's
-  `{errors: {field: [...]}}` shape.
-
-> [!WARNING]
-> The official `laravel-precognition-vue` / `-react` / `-alpine` SDKs are **not**
-> drop-in compatible. They read `response.data.errors` — which Symfony's
-> validation error body does not contain — so forms display no field errors.
-> Query-string validation can also return Symfony's default `404`. See
-> [docs/laravel-client-compatibility.md](docs/laravel-client-compatibility.md)
-> for the details and a bridge recipe.
+> [!IMPORTANT]
+> Precognition only runs validation performed during argument resolution, plus
+> explicitly annotated Symfony Forms. Validation and business rules inside the
+> controller do not run. A `204` means that the input is structurally valid,
+> not that the operation would succeed.
 
 ## Installation
 
@@ -135,8 +29,8 @@ status codes remain Symfony's native statuses for the resolver in use.
 composer require fundraisingbox/symfony-precognition
 ```
 
-Enable the bundle (Symfony Flex does this automatically; otherwise add it to
-`config/bundles.php`):
+Symfony Flex enables the bundle automatically. Without Flex, add it to
+`config/bundles.php`:
 
 ```php
 return [
@@ -145,248 +39,107 @@ return [
 ];
 ```
 
-## Configuration
+## Quick start
 
-By default, routes must opt in with `#[Precognitive]` or `#[PrecognitiveForm]`.
-To allow the header on every route, enable global mode:
-
-```yaml
-# config/packages/precognition.yaml
-precognition:
-    allow_all_routes: false # default
-```
-
-The only requirement for argument-resolution validation is that the validation
-exception raised during argument resolution is (or wraps, as previous)
-Symfony's standard `ValidationFailedException` — which is the case for
-`#[MapRequestPayload]` and for any custom resolver that throws it.
-
-Install `symfony/form` as well if you want to validate Symfony Forms
-precognitively:
-
-```bash
-composer require symfony/form
-```
-
-## Usage
-
-Given a DTO and controller that map and validate a payload:
+Add `#[Precognitive]` to a route whose arguments are validated:
 
 ```php
+use FundraisingBox\Precognition\Attribute\Precognitive;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Constraints as Assert;
-use FundraisingBox\Precognition\Attribute\Precognitive;
 
 final class UserDto
 {
     public function __construct(
         #[Assert\NotBlank]
-        public string $firstName = '',
-        #[Assert\NotBlank]
-        public string $lastName = '',
-        #[Assert\GreaterThan(18)]
-        public int $age = 0,
+        public string $name = '',
     ) {
     }
 }
 
 final class UserController
 {
-    #[Route('/user', methods: ['POST'])]
+    #[Route('/users', methods: ['POST'])]
     #[Precognitive]
-    public function create(#[MapRequestPayload] UserDto $userDto): Response
+    public function create(#[MapRequestPayload] UserDto $user): Response
     {
-        // never runs for a precognitive request
+        // Never runs for a precognitive request.
     }
 }
 ```
 
-a client validates it precognitively with the `Precognition` header:
+Send the same request that would be submitted normally, with the
+`Precognition` header:
 
 ```bash
-# Success -> 204 No Content
-curl -i -X POST https://example.test/user \
+curl -i -X POST https://example.test/users \
   -H 'Content-Type: application/json' \
   -H 'Precognition: true' \
-  -d '{"firstName":"John","lastName":"Smith","age":28}'
-# HTTP/1.1 204 No Content
-# Precognition: true
-# Precognition-Success: true
-# Vary: Precognition
-
-# Failure -> 422 with the app's normal error body
-curl -i -X POST https://example.test/user \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json' \
-  -H 'Precognition: true' \
-  -d '{"firstName":"","lastName":"Smith","age":17}'
-# HTTP/1.1 422 Unprocessable Content
-# Precognition: true
-# Vary: Precognition
-
-# Validate only selected fields
-curl -i -X POST https://example.test/user \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json' \
-  -H 'Precognition: true' \
-  -H 'Precognition-Validate-Only: firstName,age' \
-  -d '{ ... }'
+  -d '{"name":"John"}'
 ```
 
-The same protocol applies to query-string validation:
+A valid request receives:
 
-```php
-use FundraisingBox\Precognition\Attribute\Precognitive;
-use Symfony\Component\HttpKernel\Attribute\MapQueryString;
-
-#[Route('/dashboard', methods: ['GET'])]
-#[Precognitive]
-public function dashboard(#[MapQueryString] UserDto $userDto): Response
-{
-    // never runs for a precognitive request
-}
+```http
+HTTP/1.1 204 No Content
+Precognition: true
+Precognition-Success: true
+Vary: Precognition
 ```
 
-```bash
-curl -i 'https://example.test/dashboard?firstName=&lastName=Smith&age=17' \
-  -H 'Accept: application/json' \
-  -H 'Precognition: true'
-# HTTP/1.1 404 Not Found
-```
+An invalid `#[MapRequestPayload]` request receives the application's normal
+validation response, usually `422`, with `Precognition: true` and
+`Vary: Precognition` headers.
 
-Symfony's `#[MapQueryString]` returns `404` for validation failures by default.
-Precognitive requests keep that built-in status code. If your application
-configures a different `validationFailedStatusCode` on `#[MapQueryString]`,
-precognitive requests keep that configured status as well.
+Clients should always check the `Precognition: true` **response** header. If a
+route has not opted in, the request behaves as if the bundle were absent and
+the controller runs normally.
 
-Uploaded files work through `#[MapUploadedFile]` as well:
+## Configuration
 
-```php
-use FundraisingBox\Precognition\Attribute\Precognitive;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpKernel\Attribute\MapUploadedFile;
-use Symfony\Component\Validator\Constraints as Assert;
-
-#[Route('/user/picture', methods: ['PUT'])]
-#[Precognitive]
-public function changePicture(
-    #[MapUploadedFile([
-        new Assert\File(mimeTypes: ['image/png', 'image/jpeg']),
-    ])]
-    UploadedFile $picture,
-): Response {
-    // never runs for a precognitive request
-}
-```
-
-If a file endpoint should be usable precognitively without re-uploading the
-file, make the argument nullable, for example `?UploadedFile $picture = null`.
-A missing non-nullable file is rejected by Symfony with `422` before it creates a
-validation violation list, so `Precognition-Validate-Only` has nothing to filter.
-
-You can also opt in a whole controller class:
-
-```php
-use FundraisingBox\Precognition\Attribute\Precognitive;
-
-#[Precognitive]
-final class UserController
-{
-    // All routes on this controller allow precognitive requests.
-}
-```
-
-### Symfony Forms
-
-Classic Symfony Forms validate in the controller body when
-`$form->handleRequest($request)` submits the form. A global precognitive
-short-circuit would otherwise skip that code and return a false `204`, so form
-support is opt-in per endpoint:
-
-```php
-use FundraisingBox\Precognition\Attribute\PrecognitiveForm;
-use Symfony\Component\Routing\Attribute\Route;
-
-#[Route('/task/new', methods: ['POST'])]
-#[PrecognitiveForm(TaskType::class)]
-public function new(Request $request): Response
-{
-    $form = $this->createForm(TaskType::class, new Task());
-    $form->handleRequest($request);
-
-    // never runs for a precognitive request
-}
-```
-
-For a precognitive request, the bundle creates the annotated form type, disables
-CSRF on that validation-only instance, submits the request payload, and converts
-form errors into Symfony constraint violations. Normal, non-precognitive
-submits still run your controller and keep the form's real CSRF behavior.
-
-Form violation paths use field names without the root form prefix. For a form
-named `task`, an invalid `task[task]` input is reported as `task`, and
-`Precognition-Validate-Only: task` matches it.
-
-`#[PrecognitiveForm]` implies precognitive opt-in. You do not need to add an
-extra `#[Precognitive]` attribute to the same route.
-
-### Detecting precognitive requests
-
-Inject `PrecognitionContext` anywhere you need Laravel-like
-`$request->isPrecognitive()` behavior:
-
-```php
-use FundraisingBox\Precognition\Http\PrecognitionContext;
-
-final readonly class SomeService
-{
-    public function __construct(
-        private PrecognitionContext $precognition,
-    ) {
-    }
-
-    public function __invoke(): void
-    {
-        if ($this->precognition->isPrecognitive()) {
-            // The client sent Precognition: true.
-        }
-
-        if ($this->precognition->isActive()) {
-            // The current route opted in and precognition is being honoured.
-        }
-    }
-}
-```
-
-### `Precognition-Validate-Only`
-
-Field paths use Symfony property-path syntax and are matched by prefix, so
-requesting `address` also keeps violations on `address.zipCode`. Dotted object
-syntax (`address.zipCode`) and bracketed collection syntax (`[address][zipCode]`)
-are normalised to the same path, so either form matches a requested field.
-
-For DTO/query/file validation, send DTO property paths (`address.zipCode`), not
-raw form field names. For `#[PrecognitiveForm]`, send rootless form field paths
-(`task`, `category.name`).
-
-## CORS
-
-For a cross-origin frontend, allow the request headers and expose the response
-headers. With [nelmio/cors-bundle](https://github.com/nelmio/NelmioCorsBundle):
+Routes must opt in by default. To let every route answer precognitively, enable
+global mode:
 
 ```yaml
-nelmio_cors:
-    defaults:
-        allow_headers: ['Content-Type', 'Precognition', 'Precognition-Validate-Only']
-        expose_headers: ['Precognition', 'Precognition-Success']
+# config/packages/precognition.yaml
+precognition:
+    allow_all_routes: true
 ```
 
-## Frontend example
+Install `symfony/form` as well when using `#[PrecognitiveForm]`:
 
-A dependency-free example is in [`examples/vanilla-js`](examples/vanilla-js): a
-small form that validates each field on blur, cancels superseded in-flight
-validations, and renders the returned violations.
+```bash
+composer require symfony/form
+```
+
+## Documentation
+
+- [How precognition works](docs/how-it-works.md)
+- [Validating request payloads](docs/request-payloads.md)
+- [Validating query strings](docs/query-strings.md)
+- [Validating uploaded files](docs/file-uploads.md)
+- [Validating Symfony Forms](docs/symfony-forms.md)
+- [Validating selected fields](docs/validate-only.md)
+- [Configuring CORS](docs/cors.md)
+- [Laravel client compatibility](docs/laravel-client-compatibility.md)
+- [Vanilla JavaScript frontend example](examples/vanilla-js)
+
+## Prior art
+
+This bundle ports the request/response protocol of
+[Laravel Precognition](https://github.com/laravel/precognition), also described
+for Rails by
+[Inertia Precognition](https://inertia-rails.dev/guide/precognition).
+The request and success protocol matches, but validation errors retain Symfony's
+native status codes and response body.
+
+> [!WARNING]
+> The official Laravel Precognition frontend SDKs are not drop-in compatible
+> because they expect Laravel's validation error shape. See the
+> [compatibility guide](docs/laravel-client-compatibility.md) for details and a
+> bridge recipe.
 
 ## License
 

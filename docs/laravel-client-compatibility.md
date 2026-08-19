@@ -62,6 +62,29 @@ Because `response.data.errors` is `undefined`, the SDK marks the form invalid
 but populates zero field messages. It fails silently — there is no console
 error.
 
+To align query-string validation with Laravel's `422` status, configure
+Symfony's `#[MapQueryString]` attribute explicitly:
+
+```php
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapQueryString;
+
+public function search(
+    #[MapQueryString(
+        validationFailedStatusCode: Response::HTTP_UNPROCESSABLE_ENTITY,
+    )]
+    SearchQuery $query,
+): Response {
+    // ...
+}
+```
+
+This changes the status for normal and precognitive requests, but does not
+change Symfony's validation body shape. The Laravel SDK still needs one of the
+bridges below to read field errors. See
+[validating query strings](query-strings.md#return-422-for-validation-failures)
+for the complete route example.
+
 The mapping required to bridge the two shapes:
 
 | Aspect                     | Symfony default                          | Laravel client expects                       |
