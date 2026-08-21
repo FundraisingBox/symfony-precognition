@@ -34,6 +34,13 @@ and converts form errors into Symfony constraint violations. Normal,
 non-precognitive submits still run the controller and retain the form's real
 CSRF behavior.
 
+> [!IMPORTANT]
+> Disabling CSRF is limited to this throwaway form instance. The bundle does
+> not invoke the controller or persist the submitted values, and normal
+> authentication and authorization still apply. However, the form's event
+> listeners, subscribers, data transformers, and callbacks process untrusted
+> input without CSRF protection. Ensure they do not cause side effects.
+
 `#[PrecognitiveForm]` implies precognitive opt-in. Do not add an extra
 `#[Precognitive]` attribute to the same route.
 
