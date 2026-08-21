@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/FundraisingBox/symfony-precognition/compare/v1.0.0...v1.0.1) (2026-08-21)
+
+
+### Miscellaneous Chores
+
+* add UsesClass annotations to PrecognitionEventPriorityTest ([850ed11](https://github.com/FundraisingBox/symfony-precognition/commit/850ed11575b12d9922c403593d99961683efe1e5))
+* remove notify private composer repository workflow ([7b241f4](https://github.com/FundraisingBox/symfony-precognition/commit/7b241f4ea1b7286afed952d5db819f4c0e63aa4c))
+
 ## 1.0.0 (2026-08-21)
 
 
