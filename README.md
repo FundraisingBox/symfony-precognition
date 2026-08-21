@@ -155,6 +155,13 @@ native status codes and response body.
 > [compatibility guide](docs/laravel-client-compatibility.md) for details and a
 > bridge recipe.
 
+## Maintainers & Contribution
+
+Maintained by [FundraisingBox](https://fundraisingbox.com) Developers. This not an official product by
+FundraisingBox.
+
+Contributions are welcome - please do not flood with vibe-coded PRs though.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
@@ -165,3 +172,4 @@ MIT. See [LICENSE](LICENSE).
 [latest-release]: https://github.com/FundraisingBox/symfony-precognition/releases/latest
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license]: LICENSE
+
