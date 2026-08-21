@@ -44,6 +44,10 @@ final readonly class PrecognitionValidationListener
 
     public function onKernelException(ExceptionEvent $event): void
     {
+        if (!$event->isMainRequest()) {
+            return;
+        }
+
         $request = $event->getRequest();
 
         if (!$this->precognitionContext->isActive($request)) {

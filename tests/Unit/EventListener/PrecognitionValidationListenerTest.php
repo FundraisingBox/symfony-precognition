@@ -153,6 +153,20 @@ final class PrecognitionValidationListenerTest extends TestCase
         $this->assertFalse($event->isPropagationStopped());
     }
 
+    public function testIgnoresSubRequests(): void
+    {
+        $violations = $this->violationList('email');
+        $event = $this->dispatch(
+            $this->validationException($violations),
+            $this->precognitiveRequest('username'),
+            HttpKernelInterface::SUB_REQUEST
+        );
+
+        $this->assertNull($event->getResponse());
+        $this->assertFalse($event->isPropagationStopped());
+        $this->assertCount(1, $violations);
+    }
+
     public function testIgnoresNonPrecognitiveRequest(): void
     {
         $exception = $this->validationException(new ConstraintViolationList());
@@ -201,12 +215,15 @@ final class PrecognitionValidationListenerTest extends TestCase
         return new ValidationFailedException(null, $violations);
     }
 
-    private function dispatch(Throwable $exception, Request $request): ExceptionEvent
-    {
+    private function dispatch(
+        Throwable $exception,
+        Request $request,
+        int $requestType = HttpKernelInterface::MAIN_REQUEST,
+    ): ExceptionEvent {
         $event = new ExceptionEvent(
             $this->createKernelStub(),
             $request,
-            HttpKernelInterface::MAIN_REQUEST,
+            $requestType,
             $exception
         );
 
