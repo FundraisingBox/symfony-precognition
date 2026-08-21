@@ -67,6 +67,9 @@ async function requestValidation(only) {
       body: payload(),
       signal: controller.signal,
     });
+    if (response.headers.get('Precognition') !== 'true') {
+      throw new Error('Did not receive a Precognition response. Ensure the route opts in to precognition.');
+    }
     if (response.status === 204) return [];
     const body = await response.json().catch(() => null);
     return body?.violations ?? [];

@@ -51,8 +51,9 @@ nelmio_cors:
   `Precognition: true` and, for single-field checks,
   `Precognition-Validate-Only`. One `AbortController` per validation scope
   cancels the in-flight request a newer one supersedes; `AbortError` is
-  therefore ignored. A `204` means valid (returns `[]`), a `422` yields the
-  violations.
+  therefore ignored. The response must confirm that precognition was honored
+  with `Precognition: true`; a `204` then means valid (returns `[]`), while a
+  `422` yields the violations.
 - **Blur validation** — `focusout` schedules a debounced single-field check;
   the matching violation's `title` is rendered by `propertyPath`.
 - **Submit** — one full precognitive check; only if it returns no violations
