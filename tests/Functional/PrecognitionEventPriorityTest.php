@@ -15,8 +15,10 @@ use FundraisingBox\Precognition\EventListener\PrecognitionFormValidationListener
 use FundraisingBox\Precognition\EventListener\PrecognitionResponseListener;
 use FundraisingBox\Precognition\EventListener\PrecognitionShortCircuitListener;
 use FundraisingBox\Precognition\EventListener\PrecognitionValidationListener;
+use FundraisingBox\Precognition\Http\PrecognitionContext;
 use FundraisingBox\Precognition\Tests\Fixtures\TestKernel;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolver\RequestPayloadValueResolver;
@@ -24,6 +26,12 @@ use Symfony\Component\HttpKernel\EventListener\ErrorListener;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 #[CoversClass(PrecognitionEventPriority::class)]
+#[UsesClass(PrecognitionActivationListener::class)]
+#[UsesClass(PrecognitionFormValidationListener::class)]
+#[UsesClass(PrecognitionResponseListener::class)]
+#[UsesClass(PrecognitionShortCircuitListener::class)]
+#[UsesClass(PrecognitionValidationListener::class)]
+#[UsesClass(PrecognitionContext::class)]
 final class PrecognitionEventPriorityTest extends KernelTestCase
 {
     private const CONTROLLER_ATTRIBUTES_LISTENER = 'Symfony\Component\HttpKernel\EventListener\ControllerAttributesListener';
